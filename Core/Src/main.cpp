@@ -168,6 +168,42 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
+/**
+ * @brief GPIO EXTI callback function
+ * @param GPIO_Pin Pin that triggered the interrupt
+ */
+extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+  // Get references to global objects
+  extern RotaryEncoder rotary_encoder;
+  extern Button encoder_button;
+  extern Button btn_1;
+  extern Button btn_2;
+  
+  // Handle encoder and button interrupts based on specific pins
+  switch (GPIO_Pin) {
+    case GPIO_PIN_12:  // Encoder Pin A
+    case GPIO_PIN_13:  // Encoder Pin B
+      rotary_encoder.onGpioInterrupt(GPIO_Pin);
+      break;
+      
+    case GPIO_PIN_14:  // Encoder Button
+      encoder_button.onGpioInterrupt();
+      break;
+      
+    case GPIO_PIN_5:   // Button 1
+      btn_1.onGpioInterrupt();
+      break;
+      
+    case GPIO_PIN_6:   // Button 2
+      btn_2.onGpioInterrupt();
+      break;
+      
+    default:
+      // Unknown pin, ignore
+      break;
+  }
+}
+
 /* USER CODE END 4 */
 
 /**

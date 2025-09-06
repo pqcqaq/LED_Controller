@@ -8,13 +8,12 @@
 #ifndef __APP_H__
 #define __APP_H__
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "drivers/stm32_u8g2.h"
+#include "drivers/encoder.h"
+#include "drivers/button.h"
 #include <stdbool.h>
 
 /* Function prototypes -------------------------------------------------------*/
@@ -32,19 +31,9 @@ void App_Init(void);
 void App_Loop(void);
 
 /**
- * @brief Enable or disable FPS test mode
- * @param enable true to enable FPS test mode, false to disable
+ * @brief Reset button and encoder statistics
  */
-void App_SetFpsTestMode(bool enable);
+void App_ResetStats(void);
 
-/**
- * @brief Get current FPS value (multiplied by 1000)
- * @return Current FPS value as integer (actual FPS * 1000)
- */
-uint32_t App_GetCurrentFps(void);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* __APP_H__ */

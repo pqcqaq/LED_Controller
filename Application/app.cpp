@@ -11,26 +11,39 @@
 #include "u8g2.h"
 #include "usart.h"
 #include "utils/custom_types.h"
+#include "global/global_objects.h"
 #include <stdio.h>
+#include <cstdlib>
 
 /* Private variables ---------------------------------------------------------*/
 static uint32_t loop_counter = 0;
 static uint32_t last_tick = 0;
 
-// FPS测试相关变量
-static uint32_t frame_counter = 0;
-static uint32_t fps_last_tick = 0;
-static uint32_t current_fps_x1000 = 0;      // FPS值乘以1000存储为整数
-static uint32_t fps_update_interval = 1000; // 每1000ms更新一次FPS显示
-static bool fps_test_mode = true;
+// 按键和波轮测试相关变量
+static uint32_t button_press_count = 0;
+static uint32_t button_click_count = 0;
+static uint32_t button_long_press_count = 0;
+static uint32_t button_multi_click_count = 0;
+static uint8_t last_multi_click_count = 0;
+static int32_t encoder_total_steps = 0;
+static int32_t encoder_cw_steps = 0;
+static int32_t encoder_ccw_steps = 0;
+static bool button_is_pressed = false;
+static char last_event_text[64] = "System Ready";
+static EncoderSpeed_t current_encoder_speed = ENCODER_SPEED_SLOW;
+
+// U8G2 显示对象
+STM32_U8G2_Display u8g2;
 
 /* Private function prototypes -----------------------------------------------*/
-static void show_startup_animation(void);
-static void fps_test_draw(void);
-static void update_fps_counter(void);
-static void draw_fps_demo_content(void);
-
-STM32_U8G2_Display u8g2;
+static void button_event_handler(ButtonEvent_t event, ButtonState_t state);
+static void button_long_press_handler(uint32_t duration_ms);
+static void button_multi_click_handler(uint8_t click_count);
+static void encoder_event_handler(EncoderEvent_t event, EncoderDirection_t direction, int32_t steps);
+static void encoder_rotation_handler(EncoderDirection_t direction, int32_t steps, EncoderSpeed_t speed);
+static void encoder_button_handler(EncoderEvent_t event, uint32_t duration_ms);
+static void encoder_position_handler(int32_t position, int32_t delta);
+static void draw_button_encoder_test(void);
 
 /* Public functions
  * -----------------------------------------------------------*/
@@ -39,260 +52,357 @@ STM32_U8G2_Display u8g2;
  * @brief Application initialization function
  * @note Add your initialization code here
  */
-extern "C" void App_Init(void) {
+void App_Init(void) {
   // Reset variables
   loop_counter = 0;
   last_tick = HAL_GetTick();
 
-  // 初始化FPS测试变量
-  frame_counter = 0;
-  fps_last_tick = HAL_GetTick();
-  current_fps_x1000 = 0;
-  fps_test_mode = true; // 启用FPS测试模式
+  // 初始化按键和波轮测试变量
+  button_press_count = 0;
+  button_click_count = 0;
+  button_long_press_count = 0;
+  button_multi_click_count = 0;
+  last_multi_click_count = 0;
+  encoder_total_steps = 0;
+  encoder_cw_steps = 0;
+  encoder_ccw_steps = 0;
+  button_is_pressed = false;
+  current_encoder_speed = ENCODER_SPEED_SLOW;
+  snprintf(last_event_text, sizeof(last_event_text), "System Ready");
 
   // Print startup message using C++23 features and custom types
   const string_view_t startup_msg =
-      make_string_view("=== STM32 FPS Test Demo (C++23) ===\r\n");
+      make_string_view("=== STM32 Button & Encoder Test Demo (C++23 OOP) ===\r\n");
   const string_view_t success_msg =
-      make_string_view("FPS Test initialized successfully!\r\n\r\n");
+      make_string_view("Button & Encoder Test initialized successfully!\r\n\r\n");
 
   // Using our custom printf implementation
   print_string_view(&startup_msg);
   serial_printf("System Clock: %u Hz\r\n", (unsigned int)HAL_RCC_GetHCLKFreq());
   serial_printf("Tick Frequency: %u Hz\r\n", (unsigned int)HAL_GetTickFreq());
-  serial_printf("FPS Test Mode: ENABLED\r\n");
+  serial_printf("Button & Encoder Test Mode: ENABLED\r\n");
   print_string_view(&success_msg);
 
+  // 初始化显示器
   u8g2.init();
 
-  // 开屏动画
-  show_startup_animation();
+  // 初始化全局对象
+  GlobalObjects_Init();
+
+  // 配置按键回调（面向对象）
+  encoder_button.setEventCallback(button_event_handler);
+  encoder_button.handleLongPress(button_long_press_handler, 1500);  // 1.5秒长按
+  encoder_button.handleMultiClick(5, button_multi_click_handler, 400);  // 最多5击，间隔400ms
+  
+  // 启用按键中断模式
+  encoder_button.setInterruptMode(true);
+  
+  // 配置编码器回调（面向对象）
+  rotary_encoder.setEventCallback(encoder_event_handler);
+  rotary_encoder.setRotationCallback(encoder_rotation_handler);
+  rotary_encoder.setButtonCallback(encoder_button_handler);
+  rotary_encoder.setPositionCallback(encoder_position_handler);
+  
+  // 启用编码器加速功能
+  rotary_encoder.setAcceleration(true, 100, 3);  // 100ms阈值，3倍加速
+  
+  // 暂时禁用中断模式，使用轮询模式测试
+  // rotary_encoder.setInterruptMode(true);
+  
+  // 可选：设置编码器方向反转
+  // rotary_encoder.setReversed(true);
+
+  serial_printf("Event callbacks configured successfully\r\n");
+  serial_printf("Button Pin: PB14 (Encoder Push) - Polling Mode\r\n");
+  serial_printf("Encoder Pin A: PB12 - Polling Mode\r\n");
+  serial_printf("Encoder Pin B: PB13 - Polling Mode\r\n");
+  serial_printf("Encoder features: Acceleration enabled, Button integrated, Polling Mode\r\n");
 }
 
 /**
  * @brief Application main loop function
  * @note Add your main application logic here
  */
-extern "C" void App_Loop(void) {
+void App_Loop(void) {
   const uint32_t current_tick = HAL_GetTick();
 
-  // 更新FPS计数器
-  update_fps_counter();
+  // 处理全局对象（按键和波轮事件）
+  GlobalObjects_Process();
 
   // Print status every 1000ms (1 second)
   if (current_tick - last_tick >= 1000) {
     loop_counter++;
     last_tick = current_tick;
 
-    serial_printf("Loop #%u - Tick: %u ms - FPS: %u.%u\r\n",
-                  (unsigned int)loop_counter, (unsigned int)current_tick,
-                  (unsigned int)(current_fps_x1000 / 1000),
-                  (unsigned int)(current_fps_x1000 % 1000));
+    serial_printf("Loop #%u - Tick: %u ms\r\n",
+                  (unsigned int)loop_counter, (unsigned int)current_tick);
+    serial_printf("  Button Stats - Press: %u, Click: %u, Long: %u\r\n",
+                  (unsigned int)button_press_count, 
+                  (unsigned int)button_click_count,
+                  (unsigned int)button_long_press_count);
+    serial_printf("  Encoder Stats - Total: %d, CW: %d, CCW: %d, Pos: %d\r\n",
+                  (int)encoder_total_steps, 
+                  (int)encoder_cw_steps, 
+                  (int)encoder_ccw_steps,
+                  (int)rotary_encoder.getPosition());
 
     // Print additional debug info every 5 loops
     if (loop_counter % 5 == 0) {
       serial_printf("  -> System running for %u seconds\r\n",
                     (unsigned int)(current_tick / 1000));
-      serial_printf("  -> Frame counter: %u\r\n", (unsigned int)frame_counter);
+      serial_printf("  -> Last event: %s\r\n", last_event_text);
+      const char* speed_str = (current_encoder_speed == ENCODER_SPEED_FAST) ? "Fast" :
+                            (current_encoder_speed == ENCODER_SPEED_MEDIUM) ? "Medium" : "Slow";
+      serial_printf("  -> Encoder speed: %s\r\n", speed_str);
     }
   }
 
   // 渲染显示内容
-  if (fps_test_mode) {
-    fps_test_draw();
+  draw_button_encoder_test();
+}
+
+/**
+ * @brief 按键事件回调函数
+ */
+static void button_event_handler(ButtonEvent_t event, ButtonState_t state) {
+  switch (event) {
+    case BUTTON_EVENT_PRESS:
+      button_press_count++;
+      button_is_pressed = true;
+      snprintf(last_event_text, sizeof(last_event_text), "Button Pressed");
+      serial_printf("Button Event: PRESS (Count: %u)\r\n", (unsigned int)button_press_count);
+      break;
+      
+    case BUTTON_EVENT_RELEASE:
+      button_is_pressed = false;
+      snprintf(last_event_text, sizeof(last_event_text), "Button Released");
+      serial_printf("Button Event: RELEASE\r\n");
+      break;
+      
+    case BUTTON_EVENT_CLICK:
+      button_click_count++;
+      snprintf(last_event_text, sizeof(last_event_text), "Button Clicked");
+      serial_printf("Button Event: CLICK (Count: %u)\r\n", (unsigned int)button_click_count);
+      break;
+      
+    case BUTTON_EVENT_LONG_PRESS:
+      button_long_press_count++;
+      snprintf(last_event_text, sizeof(last_event_text), "Button Long Press");
+      serial_printf("Button Event: LONG_PRESS (Count: %u)\r\n", (unsigned int)button_long_press_count);
+      break;
+      
+    case BUTTON_EVENT_MULTI_CLICK:
+      button_multi_click_count++;
+      snprintf(last_event_text, sizeof(last_event_text), "Multi-Click (%u)", (unsigned int)last_multi_click_count);
+      serial_printf("Button Event: MULTI_CLICK (%u clicks, total: %u)\r\n", 
+                    (unsigned int)last_multi_click_count, (unsigned int)button_multi_click_count);
+      break;
   }
 }
 
 /**
- * @brief 显示开屏动画
- * @param u8g2 u8g2显示对象指针
+ * @brief 按键长按回调函数
  */
-void show_startup_animation() {
-  // 清屏
-  u8g2.clearBuffer();
+static void button_long_press_handler(uint32_t duration_ms) {
+  snprintf(last_event_text, sizeof(last_event_text), "Long Press %ums", (unsigned int)duration_ms);
+  serial_printf("Button Long Press Duration: %u ms\r\n", (unsigned int)duration_ms);
+}
 
-  // 第一帧：显示欢迎信息
-  u8g2.setFont(u8g2_font_ncenB14_tr);
-  u8g2.drawStr(10, 20, "STM32 System");
-  u8g2.setFont(u8g2_font_ncenB10_tr);
-  u8g2.drawStr(25, 35, "Starting...");
-  u8g2.sendBuffer();
-  HAL_Delay(1000);
+/**
+ * @brief 按键多击回调函数
+ */
+static void button_multi_click_handler(uint8_t click_count) {
+  last_multi_click_count = click_count;
+  snprintf(last_event_text, sizeof(last_event_text), "%u-Click Detected", click_count);
+  serial_printf("Button Multi-Click: %u clicks detected\r\n", click_count);
+}
 
-  // 第二帧：绘制加载条动画
-  for (int i = 0; i <= 100; i += 10) {
+/**
+ * @brief 编码器事件回调函数
+ */
+static void encoder_event_handler(EncoderEvent_t event, EncoderDirection_t direction, int32_t steps) {
+  switch (event) {
+    case ENCODER_EVENT_ROTATE_CW:
+      encoder_cw_steps += steps;
+      encoder_total_steps += steps;
+      snprintf(last_event_text, sizeof(last_event_text), "Encoder CW (%d)", (int)steps);
+      serial_printf("Encoder Event: ROTATE_CW (Steps: %d, Total: %d, Pos: %d)\r\n", 
+                    (int)steps, (int)encoder_total_steps, (int)rotary_encoder.getPosition());
+      break;
+      
+    case ENCODER_EVENT_ROTATE_CCW:
+      encoder_ccw_steps += steps;
+      encoder_total_steps -= steps;
+      snprintf(last_event_text, sizeof(last_event_text), "Encoder CCW (%d)", (int)steps);
+      serial_printf("Encoder Event: ROTATE_CCW (Steps: %d, Total: %d, Pos: %d)\r\n", 
+                    (int)steps, (int)encoder_total_steps, (int)rotary_encoder.getPosition());
+      break;
+      
+    case ENCODER_EVENT_BUTTON_PRESS:
+      snprintf(last_event_text, sizeof(last_event_text), "Encoder Button Press");
+      serial_printf("Encoder Button Event: PRESS\r\n");
+      break;
+      
+    case ENCODER_EVENT_BUTTON_RELEASE:
+      snprintf(last_event_text, sizeof(last_event_text), "Encoder Button Release");
+      serial_printf("Encoder Button Event: RELEASE\r\n");
+      break;
+      
+    case ENCODER_EVENT_BUTTON_CLICK:
+      snprintf(last_event_text, sizeof(last_event_text), "Encoder Button Click");
+      serial_printf("Encoder Button Event: CLICK\r\n");
+      break;
+      
+    case ENCODER_EVENT_BUTTON_LONG_PRESS:
+      snprintf(last_event_text, sizeof(last_event_text), "Encoder Button Long");
+      serial_printf("Encoder Button Event: LONG_PRESS\r\n");
+      break;
+  }
+}
+
+/**
+ * @brief 编码器旋转专用回调函数
+ */
+static void encoder_rotation_handler(EncoderDirection_t direction, int32_t steps, EncoderSpeed_t speed) {
+  current_encoder_speed = speed;
+  const char* speed_str = (speed == ENCODER_SPEED_FAST) ? "Fast" :
+                        (speed == ENCODER_SPEED_MEDIUM) ? "Medium" : "Slow";
+  const char* dir_str = (direction == ENCODER_DIR_CW) ? "CW" : "CCW";
+  
+  serial_printf("Encoder Rotation: %s, Steps: %d, Speed: %s\r\n", 
+                dir_str, (int)steps, speed_str);
+}
+
+/**
+ * @brief 编码器按键专用回调函数
+ */
+static void encoder_button_handler(EncoderEvent_t event, uint32_t duration_ms) {
+  switch (event) {
+    case ENCODER_EVENT_BUTTON_PRESS:
+      serial_printf("Encoder Button: Pressed\r\n");
+      break;
+    case ENCODER_EVENT_BUTTON_RELEASE:
+      serial_printf("Encoder Button: Released (Duration: %u ms)\r\n", (unsigned int)duration_ms);
+      break;
+    case ENCODER_EVENT_BUTTON_CLICK:
+      serial_printf("Encoder Button: Click (Duration: %u ms)\r\n", (unsigned int)duration_ms);
+      break;
+    case ENCODER_EVENT_BUTTON_LONG_PRESS:
+      serial_printf("Encoder Button: Long Press (Duration: %u ms)\r\n", (unsigned int)duration_ms);
+      break;
+    default:
+      break;
+  }
+}
+
+/**
+ * @brief 编码器位置变化回调函数
+ */
+static void encoder_position_handler(int32_t position, int32_t delta) {
+  // 这个回调可用于实时位置监控
+  // 为了避免输出过多，这里仅在调试时使用
+  // serial_printf("Encoder Position: %d (Delta: %d)\r\n", (int)position, (int)delta);
+}
+
+/**
+ * @brief 绘制按键和波轮测试界面
+ */
+static void draw_button_encoder_test(void) {
+  static uint32_t last_update = 0;
+  uint32_t current_tick = HAL_GetTick();
+  
+  // 限制更新频率，每50ms更新一次（20 FPS）
+  if (current_tick - last_update < 50) {
+    return;
+  }
+  last_update = current_tick;
+  
+  u8g2.firstPage();
+  do {
+    // 清空缓冲区
     u8g2.clearBuffer();
 
     // 标题
-    u8g2.setFont(u8g2_font_ncenB12_tr);
-    u8g2.drawStr(20, 15, "Initializing");
+    u8g2.setFont(u8g2_font_6x10_tr);
+    u8g2.drawStr(0, 10, "Button & Encoder Test");
 
-    // 加载条背景
-    u8g2.drawFrame(10, 25, 108, 10);
+    // 按键状态显示
+    u8g2.setFont(u8g2_font_6x10_tr);
+    char button_status[32];
+    if (button_is_pressed || rotary_encoder.isButtonPressed()) {
+      snprintf(button_status, sizeof(button_status), "Button: PRESSED");
+    } else {
+      snprintf(button_status, sizeof(button_status), "Button: Released");
+    }
+    u8g2.drawStr(0, 22, button_status);
 
-    // 加载条进度
-    if (i > 0) {
-      u8g2.drawBox(12, 27, (i * 104) / 100, 6);
+    // 按键统计
+    char button_stats[32];
+    snprintf(button_stats, sizeof(button_stats), "P:%u C:%u L:%u M:%u", 
+             (unsigned int)button_press_count, 
+             (unsigned int)button_click_count,
+             (unsigned int)button_long_press_count,
+             (unsigned int)button_multi_click_count);
+    u8g2.drawStr(0, 32, button_stats);
+
+    // 波轮位置和速度
+    char encoder_pos[32];
+    const char* speed_str = (current_encoder_speed == ENCODER_SPEED_FAST) ? "F" :
+                          (current_encoder_speed == ENCODER_SPEED_MEDIUM) ? "M" : "S";
+    snprintf(encoder_pos, sizeof(encoder_pos), "Encoder: %d (%s)", 
+             (int)rotary_encoder.getPosition(), speed_str);
+    u8g2.drawStr(0, 42, encoder_pos);
+
+    // 波轮统计
+    char encoder_stats[32];
+    snprintf(encoder_stats, sizeof(encoder_stats), "CW:%d CCW:%d", 
+             (int)encoder_cw_steps, (int)encoder_ccw_steps);
+    u8g2.drawStr(0, 52, encoder_stats);
+
+    // 最后事件
+    u8g2.setFont(u8g2_font_5x7_tr);
+    u8g2.drawStr(0, 62, "Last:");
+    u8g2.drawStr(25, 62, last_event_text);
+
+    // 绘制一个简单的视觉指示器
+    // 按键状态指示器
+    if (button_is_pressed || rotary_encoder.isButtonPressed()) {
+      u8g2.drawBox(110, 20, 8, 8);  // 实心方块表示按下
+    } else {
+      u8g2.drawFrame(110, 20, 8, 8); // 空心方块表示释放
     }
 
-    // 百分比
-    char progress_text[8];
-    snprintf(progress_text, sizeof(progress_text), "%d%%", i);
-    u8g2.setFont(u8g2_font_6x10_tr);
-    u8g2.drawStr(55, 50, progress_text);
-
-    u8g2.sendBuffer();
-    HAL_Delay(200);
-  }
-
-  // 第三帧：显示完成信息
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_ncenB14_tr);
-  u8g2.drawStr(35, 25, "Ready!");
-
-  // 绘制一个简单的图标
-  u8g2.drawCircle(64, 45, 8, U8G2_DRAW_ALL);
-  u8g2.drawStr(60, 50, "OK");
-
-  u8g2.sendBuffer();
-  HAL_Delay(1500);
-
-  // 清屏，准备进入主循环
-  u8g2.clearBuffer();
-  u8g2.sendBuffer();
-}
-
-/**
- * @brief 更新FPS计数器
- */
-static void update_fps_counter(void) {
-  frame_counter++;
-
-  uint32_t current_tick = HAL_GetTick();
-  uint32_t elapsed = current_tick - fps_last_tick;
-
-  // 每隔指定时间间隔更新FPS计算
-  if (elapsed >= fps_update_interval) {
-    // 使用整数运算：FPS = frame_counter * 1000000 / elapsed (结果乘以1000)
-    current_fps_x1000 = (frame_counter * 1000000) / elapsed;
-    frame_counter = 0;
-    fps_last_tick = current_tick;
-  }
-}
-
-/**
- * @brief FPS测试专用绘制函数
- * @param u8g2 u8g2显示对象指针
- */
-static void fps_test_draw() {
-  u8g2.firstPage();
-  do {
-    draw_fps_demo_content();
+    // 波轮位置指示器（简单的条形图）
+    int32_t pos = rotary_encoder.getPosition();
+    int bar_length = abs((int)pos) % 50;
+    if (pos >= 0) {
+      u8g2.drawBox(110, 40, bar_length / 2, 4);
+    } else {
+      u8g2.drawBox(110 - bar_length / 2, 40, bar_length / 2, 4);
+    }
+    
+    // 速度指示器
+    uint8_t speed_bars = (uint8_t)current_encoder_speed;
+    for (uint8_t i = 0; i < speed_bars; i++) {
+      u8g2.drawBox(110 + i * 3, 50, 2, 6);
+    }
+    
   } while (u8g2.nextPage());
 }
 
 /**
- * @brief 绘制FPS测试演示内容
- * @param u8g2 u8g2显示对象指针
+ * @brief 重置按键和波轮统计
  */
-static void draw_fps_demo_content() {
-  static uint32_t animation_counter = 0;
-  uint32_t current_tick = HAL_GetTick();
-
-  // 清空缓冲区
-  u8g2.clearBuffer();
-
-  // 标题
-  u8g2.setFont(u8g2_font_6x10_tr);
-  u8g2.drawStr(0, 10, "STM32 FPS Test Demo");
-
-  // 显示FPS
-  char fps_text[32];
-  snprintf(fps_text, sizeof(fps_text), "FPS: %u.%u",
-           (unsigned int)(current_fps_x1000 / 1000),
-           (unsigned int)((current_fps_x1000 % 1000) / 100)); // 显示一位小数
-  u8g2.setFont(u8g2_font_7x13_tr);
-  u8g2.drawStr(0, 25, fps_text);
-
-  // 显示帧计数
-  char frame_text[32];
-  snprintf(frame_text, sizeof(frame_text), "Frames: %u",
-           (unsigned int)frame_counter);
-  u8g2.setFont(u8g2_font_6x10_tr);
-  u8g2.drawStr(0, 35, frame_text);
-
-  // 显示运行时间
-  char time_text[32];
-  uint32_t seconds = current_tick / 1000;
-  snprintf(time_text, sizeof(time_text), "Time: %us", (unsigned int)seconds);
-  u8g2.drawStr(0, 45, time_text);
-
-  // 绘制一些动画效果来测试FPS
-  animation_counter = (current_tick / 50) % 128; // 50ms为一个周期，范围0-127
-
-  // 移动的圆点
-  u8g2.drawCircle(animation_counter, 55, 3, U8G2_DRAW_ALL);
-
-  // 移动的矩形
-  uint8_t rect_x = (current_tick / 30) % 108; // 30ms为一个周期
-  u8g2.drawBox(rect_x, 58, 20, 4);
-
-  // 旋转的线条（简化版）
-  int angle = (current_tick / 100) % 8; // 8个方向
-  int center_x = 100, center_y = 55;
-  int line_length = 15;
-
-  switch (angle) {
-  case 0:
-    u8g2.drawLine(center_x, center_y, center_x + line_length, center_y);
-    break;
-  case 1:
-    u8g2.drawLine(center_x, center_y, center_x + line_length,
-                  center_y - line_length);
-    break;
-  case 2:
-    u8g2.drawLine(center_x, center_y, center_x, center_y - line_length);
-    break;
-  case 3:
-    u8g2.drawLine(center_x, center_y, center_x - line_length,
-                  center_y - line_length);
-    break;
-  case 4:
-    u8g2.drawLine(center_x, center_y, center_x - line_length, center_y);
-    break;
-  case 5:
-    u8g2.drawLine(center_x, center_y, center_x - line_length,
-                  center_y + line_length);
-    break;
-  case 6:
-    u8g2.drawLine(center_x, center_y, center_x, center_y + line_length);
-    break;
-  case 7:
-    u8g2.drawLine(center_x, center_y, center_x + line_length,
-                  center_y + line_length);
-    break;
-  }
+void App_ResetStats(void) {
+  button_press_count = 0;
+  button_click_count = 0;
+  button_long_press_count = 0;
+  button_multi_click_count = 0;
+  last_multi_click_count = 0;
+  encoder_total_steps = 0;
+  encoder_cw_steps = 0;
+  encoder_ccw_steps = 0;
+  rotary_encoder.resetPosition();
+  snprintf(last_event_text, sizeof(last_event_text), "Stats Reset");
+  serial_printf("Button & Encoder statistics reset\r\n");
 }
-
-/**
- * @brief 设置FPS测试模式
- * @param enable true启用FPS测试模式，false禁用
- */
-void App_SetFpsTestMode(bool enable) {
-  fps_test_mode = enable;
-  if (enable) {
-    // 重置FPS计数器
-    frame_counter = 0;
-    fps_last_tick = HAL_GetTick();
-    current_fps_x1000 = 0;
-    serial_printf("FPS Test Mode: ENABLED\r\n");
-  } else {
-    serial_printf("FPS Test Mode: DISABLED\r\n");
-  }
-}
-
-/**
- * @brief 获取当前FPS值（扩大1000倍的整数）
- * @return 当前FPS值乘以1000的整数
- */
-uint32_t App_GetCurrentFps(void) { return current_fps_x1000; }

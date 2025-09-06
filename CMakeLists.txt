@@ -51,8 +51,12 @@ file(GLOB U8G2_C_SOURCES "Libs/u8g2/csrc/*.c")
 file(GLOB U8G2_CPP_SOURCES "Libs/u8g2/cppsrc/*.cpp")
 
 # Collect Application source files (both C and C++)
-file(GLOB APP_C_SOURCES "Application/*.c" "Application/drivers/*.c" "Application/utils/*.c")
-file(GLOB APP_CPP_SOURCES "Application/*.cpp" "Application/drivers/*.cpp" "Application/utils/*.cpp")
+file(GLOB APP_C_SOURCES "Application/*.c" "Application/drivers/*.c" "Application/utils/*.c" "Application/global/*.c")
+file(GLOB APP_CPP_SOURCES "Application/*.cpp" "Application/drivers/*.cpp" "Application/utils/*.cpp" "Application/global/*.cpp")
+
+# Remove old button_encoder files from the list
+list(FILTER APP_CPP_SOURCES EXCLUDE REGEX ".*button_encoder\\.cpp$")
+list(FILTER APP_C_SOURCES EXCLUDE REGEX ".*button_encoder\\.c$")
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
@@ -69,6 +73,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Application
     Application/drivers
     Application/utils
+    Application/global
     Libs/u8g2/csrc
     Libs/u8g2/cppsrc
 )
