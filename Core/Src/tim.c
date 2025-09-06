@@ -44,9 +44,12 @@ void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 71;
+  htim1.Init.Prescaler = 0;  // 无预分频，获得最高分辨率
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 65535;
+  htim1.Init.Period = 6100;  // ARR = 3600，16位分辨率，PWM频率 = 72MHz/3600 = 20kHz
+  // 如果需要更高频率，可选择：
+  // Period = 7199; // PWM频率 = 72MHz/7200 = 10kHz，分辨率7200
+  // Period = 3599; // PWM频率 = 72MHz/3600 = 20kHz，分辨率3600
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;

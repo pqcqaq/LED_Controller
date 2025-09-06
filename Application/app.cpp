@@ -10,6 +10,7 @@
 #include "stm32_u8g2.h"
 #include "u8g2.h"
 #include "usart.h"
+#include "tim.h"
 #include "utils/custom_types.h"
 #include "global/global_objects.h"
 #include <stdio.h>
@@ -117,6 +118,18 @@ void App_Init(void) {
   serial_printf("Encoder Pin A: PB12 - Polling Mode\r\n");
   serial_printf("Encoder Pin B: PB13 - Polling Mode\r\n");
   serial_printf("Encoder features: Acceleration enabled, Button integrated, Polling Mode\r\n");
+  
+  // 启动TIM1的PWM输出
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);  // PA8 - TIM1_CH1
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);  // PA9 - TIM1_CH2
+  
+  // 初始化PWM占空比为0
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, 0);
+  
+  serial_printf("PWM initialized - PA8(TIM1_CH1) and PA9(TIM1_CH2)\r\n");
+  serial_printf("PWM Frequency: ~1.1kHz, Resolution: 65536 levels (16-bit)\r\n");
+  serial_printf("Encoder scaling: 1 step = 1000 PWM counts\r\n");
 }
 
 /**
@@ -128,6 +141,36 @@ void App_Loop(void) {
 
   // 处理全局对象（按键和波轮事件）
   GlobalObjects_Process();
+
+  // 根据编码器位置控制PWM输出
+  int32_t encoder_position = rotary_encoder.getPosition();
+  uint32_t pwm_ch1_value = 0;  // PA8 - TIM1_CH1
+  uint32_t pwm_ch2_value = 0;  // PA9 - TIM1_CH2
+  
+  // PWM缩放因子，将编码器值映射到16位PWM范围
+  const uint32_t PWM_MAX_VALUE = 6100;    // 16位最大值 (1<<16 - 1)
+  
+  if (encoder_position > 0) {
+    // 编码器值为正时，PA8输出PWM，PA9为0
+    pwm_ch1_value = (uint32_t)encoder_position;
+    pwm_ch2_value = 0;
+  } else if (encoder_position < 0) {
+    // 编码器值为负时，PA9输出PWM，PA8为0
+    pwm_ch1_value = 0;
+    pwm_ch2_value = (uint32_t)(-encoder_position);  // 取绝对值并缩放
+  } else {
+    // 编码器值为0时，两个通道都为0
+    pwm_ch1_value = 0;
+    pwm_ch2_value = 0;
+  }
+  
+  // 限制PWM值不超过16位最大值
+  if (pwm_ch1_value > PWM_MAX_VALUE) pwm_ch1_value = PWM_MAX_VALUE;
+  if (pwm_ch2_value > PWM_MAX_VALUE) pwm_ch2_value = PWM_MAX_VALUE;
+  
+  // 设置PWM占空比
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pwm_ch1_value);
+  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, pwm_ch2_value);
 
   // Print status every 1000ms (1 second)
   if (current_tick - last_tick >= 1000) {
@@ -145,6 +188,14 @@ void App_Loop(void) {
                   (int)encoder_cw_steps, 
                   (int)encoder_ccw_steps,
                   (int)rotary_encoder.getPosition());
+    
+    // 显示PWM输出值和占空比
+    uint32_t pwm_ch1 = __HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_1);
+    uint32_t pwm_ch2 = __HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_2);
+    float duty_ch1 = (float)pwm_ch1 / 65536.0f * 100.0f;
+    float duty_ch2 = (float)pwm_ch2 / 65536.0f * 100.0f;
+    serial_printf("  PWM Output - PA8(CH1): %u (%.1f%%), PA9(CH2): %u (%.1f%%)\r\n",
+                  (unsigned int)pwm_ch1, duty_ch1, (unsigned int)pwm_ch2, duty_ch2);
 
     // Print additional debug info every 5 loops
     if (loop_counter % 5 == 0) {
@@ -359,10 +410,19 @@ static void draw_button_encoder_test(void) {
              (int)encoder_cw_steps, (int)encoder_ccw_steps);
     u8g2.drawStr(0, 52, encoder_stats);
 
-    // 最后事件
+    // PWM输出值显示
+    char pwm_info[32];
+    uint32_t pwm_ch1 = __HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_1);
+    uint32_t pwm_ch2 = __HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_2);
+    snprintf(pwm_info, sizeof(pwm_info), "PWM A8:%u A9:%u", 
+             (unsigned int)pwm_ch1, (unsigned int)pwm_ch2);
+    u8g2.drawStr(0, 62, pwm_info);
+
+    // 最后事件（缩短显示）
     u8g2.setFont(u8g2_font_5x7_tr);
-    u8g2.drawStr(0, 62, "Last:");
-    u8g2.drawStr(25, 62, last_event_text);
+    char short_event[20];
+    snprintf(short_event, sizeof(short_event), "%.18s", last_event_text);
+    u8g2.drawStr(0, 72, short_event);
 
     // 绘制一个简单的视觉指示器
     // 按键状态指示器
