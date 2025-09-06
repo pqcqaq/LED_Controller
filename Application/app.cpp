@@ -91,7 +91,7 @@ void App_Init(void) {
 
   // 配置按键回调（面向对象）
   encoder_button.setEventCallback(button_event_handler);
-  encoder_button.handleLongPress(button_long_press_handler, 1500);  // 1.5秒长按
+  encoder_button.handleLongPress(button_long_press_handler, 800);  // 800毫秒长按
   encoder_button.handleMultiClick(5, button_multi_click_handler, 400);  // 最多5击，间隔400ms
   
   // 启用按键中断模式
