@@ -21,6 +21,7 @@
 #include "adc.h"
 #include "gpio.h"
 #include "i2c.h"
+#include "stm32f1xx_hal_iwdg.h"
 #include "tim.h"
 #include "usart.h"
 #include "usb_device.h"
@@ -29,6 +30,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "app.h"
+#include "iwdg.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -99,6 +101,7 @@ int main(void) {
   MX_USB_DEVICE_Init();
   MX_USART2_UART_Init();
   MX_TIM2_Init();
+  MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
 
   // Initialize user application
@@ -114,6 +117,7 @@ int main(void) {
     /* USER CODE BEGIN 3 */
 
     // Call user application loop
+    HAL_IWDG_Refresh(&hiwdg); // 喂狗
     App_Loop();
   }
   /* USER CODE END 3 */
