@@ -51,8 +51,8 @@ typedef enum {
 #define ENCODER_DEFAULT_DEBOUNCE_TIME_MS    5       // Encoder debounce time
 #define ENCODER_BUTTON_DEBOUNCE_TIME_MS     50      // Button debounce time
 #define ENCODER_BUTTON_LONG_PRESS_TIME_MS   1000    // Button long press threshold
-#define ENCODER_SPEED_THRESHOLD_FAST_MS     50      // Fast rotation threshold
-#define ENCODER_SPEED_THRESHOLD_MEDIUM_MS   200     // Medium rotation threshold
+#define ENCODER_SPEED_THRESHOLD_FAST_MS     75      // Fast rotation threshold
+#define ENCODER_SPEED_THRESHOLD_MEDIUM_MS   250     // Medium rotation threshold
 
 /* C++ Class Definition ------------------------------------------------------*/
 

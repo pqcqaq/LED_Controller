@@ -144,7 +144,7 @@ void App_Init(void) {
   rotary_encoder.setPositionCallback(encoder_position_handler);
 
   // 启用编码器加速功能
-  rotary_encoder.setAcceleration(true, 100, 3); // 100ms阈值，3倍加速
+  rotary_encoder.setAcceleration(true, 200, 3); // 200ms阈值，3倍加速
 
   // 暂时禁用中断模式，使用轮询模式测试
   // rotary_encoder.setInterruptMode(true);
