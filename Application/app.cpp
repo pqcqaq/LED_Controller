@@ -46,7 +46,6 @@ static void encoder_event_handler(EncoderEvent_t event,
                                   EncoderDirection_t direction, int32_t steps);
 static void encoder_rotation_handler(EncoderDirection_t direction,
                                      int32_t steps, EncoderSpeed_t speed);
-static void encoder_button_handler(EncoderEvent_t event, uint32_t duration_ms);
 static void encoder_position_handler(int32_t position, int32_t delta);
 static void draw_button_encoder_test(void);
 
@@ -140,11 +139,10 @@ void App_Init(void) {
   // 配置编码器回调（面向对象）
   rotary_encoder.setEventCallback(encoder_event_handler);
   rotary_encoder.setRotationCallback(encoder_rotation_handler);
-  rotary_encoder.setButtonCallback(encoder_button_handler);
   rotary_encoder.setPositionCallback(encoder_position_handler);
 
   // 启用编码器加速功能
-  rotary_encoder.setAcceleration(true, 200, 3); // 200ms阈值，3倍加速
+  rotary_encoder.setAcceleration(true, 50, 3); // 200ms阈值，3倍加速
 
   // 暂时禁用中断模式，使用轮询模式测试
   // rotary_encoder.setInterruptMode(true);
@@ -347,27 +345,6 @@ static void encoder_event_handler(EncoderEvent_t event,
         (int)steps, (int)encoder_total_steps,
         (int)rotary_encoder.getPosition());
     break;
-
-  case ENCODER_EVENT_BUTTON_PRESS:
-    snprintf(last_event_text, sizeof(last_event_text), "Encoder Button Press");
-    serial_printf("Encoder Button Event: PRESS\r\n");
-    break;
-
-  case ENCODER_EVENT_BUTTON_RELEASE:
-    snprintf(last_event_text, sizeof(last_event_text),
-             "Encoder Button Release");
-    serial_printf("Encoder Button Event: RELEASE\r\n");
-    break;
-
-  case ENCODER_EVENT_BUTTON_CLICK:
-    snprintf(last_event_text, sizeof(last_event_text), "Encoder Button Click");
-    serial_printf("Encoder Button Event: CLICK\r\n");
-    break;
-
-  case ENCODER_EVENT_BUTTON_LONG_PRESS:
-    snprintf(last_event_text, sizeof(last_event_text), "Encoder Button Long");
-    serial_printf("Encoder Button Event: LONG_PRESS\r\n");
-    break;
   }
 }
 
@@ -389,28 +366,6 @@ static void encoder_rotation_handler(EncoderDirection_t direction,
 /**
  * @brief 编码器按键专用回调函数
  */
-static void encoder_button_handler(EncoderEvent_t event, uint32_t duration_ms) {
-  switch (event) {
-  case ENCODER_EVENT_BUTTON_PRESS:
-    serial_printf("Encoder Button: Pressed\r\n");
-    break;
-  case ENCODER_EVENT_BUTTON_RELEASE:
-    serial_printf("Encoder Button: Released (Duration: %u ms)\r\n",
-                  (unsigned int)duration_ms);
-    break;
-  case ENCODER_EVENT_BUTTON_CLICK:
-    serial_printf("Encoder Button: Click (Duration: %u ms)\r\n",
-                  (unsigned int)duration_ms);
-    break;
-  case ENCODER_EVENT_BUTTON_LONG_PRESS:
-    serial_printf("Encoder Button: Long Press (Duration: %u ms)\r\n",
-                  (unsigned int)duration_ms);
-    break;
-  default:
-    break;
-  }
-}
-
 /**
  * @brief 编码器位置变化回调函数
  */
@@ -446,7 +401,7 @@ static void draw_button_encoder_test(void) {
     // 按键状态显示
     u8g2.setFont(u8g2_font_6x10_tr);
     char button_status[32];
-    if (button_is_pressed || rotary_encoder.isButtonPressed()) {
+    if (button_is_pressed || (encoder_button.isPressed())) {
       snprintf(button_status, sizeof(button_status), "Button: PRESSED");
     } else {
       snprintf(button_status, sizeof(button_status), "Button: Released");
@@ -493,7 +448,7 @@ static void draw_button_encoder_test(void) {
 
     // 绘制一个简单的视觉指示器
     // 按键状态指示器
-    if (button_is_pressed || rotary_encoder.isButtonPressed()) {
+    if (button_is_pressed || (encoder_button.isPressed())) {
       u8g2.drawBox(110, 20, 8, 8); // 实心方块表示按下
     } else {
       u8g2.drawFrame(110, 20, 8, 8); // 空心方块表示释放
