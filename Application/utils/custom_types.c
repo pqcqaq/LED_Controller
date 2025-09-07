@@ -9,6 +9,7 @@
 #include "custom_types.h"
 #include "usart.h"
 #include <stdarg.h>
+#include <stdio.h>
 
 /* Private function prototypes -----------------------------------------------*/
 static int custom_strlen(const char* str);
@@ -33,74 +34,18 @@ const char* string_view_data(const string_view_t* sv) {
 }
 
 int serial_printf(const char* format, ...) {
+    char buffer[128];
     va_list args;
     va_start(args, format);
+    int len = vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
     
-    char buffer[256];
-    int count = 0;
-    int i = 0;
-    
-    while (format[i] != '\0' && count < sizeof(buffer) - 1) {
-        if (format[i] == '%' && format[i + 1] != '\0') {
-            i++; // skip '%'
-            
-            switch (format[i]) {
-                case 'd': {
-                    int value = va_arg(args, int);
-                    char num_buffer[12];
-                    int len = custom_itoa(value, num_buffer, 10);
-                    for (int j = 0; j < len && count < sizeof(buffer) - 1; j++) {
-                        buffer[count++] = num_buffer[j];
-                    }
-                    break;
-                }
-                case 'u': {
-                    unsigned int value = va_arg(args, unsigned int);
-                    char num_buffer[12];
-                    int len = custom_utoa(value, num_buffer, 10);
-                    for (int j = 0; j < len && count < sizeof(buffer) - 1; j++) {
-                        buffer[count++] = num_buffer[j];
-                    }
-                    break;
-                }
-                case 'c': {
-                    char c = (char)va_arg(args, int);
-                    buffer[count++] = c;
-                    break;
-                }
-                case 's': {
-                    const char* str = va_arg(args, const char*);
-                    while (*str != '\0' && count < sizeof(buffer) - 1) {
-                        buffer[count++] = *str++;
-                    }
-                    break;
-                }
-                case '%': {
-                    buffer[count++] = '%';
-                    break;
-                }
-                default: {
-                    // Unknown format specifier, just copy it
-                    buffer[count++] = '%';
-                    if (count < sizeof(buffer) - 1) {
-                        buffer[count++] = format[i];
-                    }
-                    break;
-                }
-            }
-        } else {
-            buffer[count++] = format[i];
-        }
-        i++;
+    if (len > 0) {
+        // Send via UART
+        HAL_UART_Transmit(&huart2, (uint8_t*)buffer, (len > sizeof(buffer) ? sizeof(buffer) : len), HAL_MAX_DELAY);
     }
     
-    buffer[count] = '\0';
-    
-    // Send via UART
-    HAL_UART_Transmit(&huart2, (uint8_t*)buffer, count, HAL_MAX_DELAY);
-    
-    va_end(args);
-    return count;
+    return len;
 }
 
 int print_string_view(const string_view_t* sv) {
