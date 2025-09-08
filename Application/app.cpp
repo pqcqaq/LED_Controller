@@ -427,3 +427,8 @@ static void encoder_rotation_handler(EncoderDirection_t direction,
 //   // serial_printf("Encoder Position: %d (Delta: %d)\r\n", (int)position,
 //   // (int)delta);
 // }
+
+void App_TIM3_IRQHandler(void) {
+  // 每次中断发生时，计数器加1
+  updatePWM();
+}

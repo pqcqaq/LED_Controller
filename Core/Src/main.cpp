@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "adc.h"
+#include "custom_types.h"
 #include "gpio.h"
 #include "i2c.h"
 #include "stm32f1xx_hal_iwdg.h"
@@ -101,6 +102,8 @@ int main(void) {
   MX_USB_DEVICE_Init();
   MX_USART2_UART_Init();
   MX_TIM2_Init();
+  MX_TIM3_Init();
+  HAL_TIM_Base_Start_IT(&htim3); // 启动定时器3中断
   MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
 
@@ -118,6 +121,7 @@ int main(void) {
 
     // Call user application loop
     HAL_IWDG_Refresh(&hiwdg); // 喂狗
+
     App_Loop();
   }
   /* USER CODE END 3 */
@@ -211,6 +215,14 @@ extern "C" void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
     adc_value = HAL_ADC_GetValue(hadc);
     // HAL_ADC_Start_IT(&hadc1); // 需要的时候再开启ADC
     adc_done_flag = 1; // 设置ADC完成标志
+  }
+}
+
+// 用于计算频率的全局变量
+extern "C" void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+  if (htim == &htim3) {
+    // 每次中断发生时，计数器加1
+    App_TIM3_IRQHandler();
   }
 }
 

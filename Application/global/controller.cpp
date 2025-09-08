@@ -24,8 +24,12 @@ SystemState lastState = {true, false, LED_MAX_BRIGHTNESS,
                          255,  32767, 32767,
                          127,  127,   127}; // 初始化为不同值，确保首次更新
 
+unsigned char btn_changed = 0;
+
 // 处理按钮单击事件 - 在色温和亮度之间切换，始终编辑状态
 void handleClick() {
+  btn_changed = 1;
+
   // 只在色温(1)和亮度(2)之间切换
   if (state.item == 1) {
     state.item = 2; // 从色温切换到亮度
@@ -41,6 +45,7 @@ void handleClick() {
 
 // 处理按钮双击事件 - 开关输出
 void handleDoubleClick() {
+  btn_changed = 1;
   // 双击切换主开关状态
   // state.master = !state.master;
   // state.edit = -1; // 退出编辑模式
@@ -50,6 +55,7 @@ void handleDoubleClick() {
 
 // 处理按钮长按事件 - 开机/关机
 void handleLongPress() {
+  btn_changed = 1;
   // state.master = false;
   // state.colorTemp = COLOR_TEMP_DEFAULT;
   // state.brightness = BRIGHTNESS_DEFAULT;
@@ -88,8 +94,6 @@ void calculateChannelRatio(uint16_t colorTemp, uint16_t brightness,
                       (mired_max - mired_min);
   cct_ratio = constrain(cct_ratio, 0, LED_TEMP_WEIGHT_TOTAL);
 
-  serial_printf("CCT Ratio: %d\r\n", cct_ratio);
-
   // CCT叠加混合比例 (0-100)，可以根据需要调整
   // 0 = 纯线性混合，100 = 完全叠加混合
 
@@ -97,23 +101,15 @@ void calculateChannelRatio(uint16_t colorTemp, uint16_t brightness,
   int32_t warm_weight = LED_TEMP_WEIGHT_TOTAL - cct_ratio; // ch1 (暖白) 权重
   int32_t cold_weight = cct_ratio;                         // ch2 (冷白) 权重
 
-  serial_printf("Warm Weight: %d, Cold Weight: %d\r\n", warm_weight,
-                cold_weight);
-
   uint16_t ch1_brightness, ch2_brightness;
 
   // 计算线性混合的亮度
   int32_t ch1_linear = (brightness * warm_weight) / LED_TEMP_WEIGHT_TOTAL;
   int32_t ch2_linear = (brightness * cold_weight) / LED_TEMP_WEIGHT_TOTAL;
 
-  serial_printf("ch1_linear: %d, ch2_linear: %d\r\n", ch1_linear, ch2_linear);
-
   // 计算叠加混合的亮度
   int32_t ch1_additive = (warm_weight > 0) ? brightness : 0;
   int32_t ch2_additive = (cold_weight > 0) ? brightness : 0;
-
-  serial_printf("ch1_additive: %d, ch2_additive: %d\r\n", ch1_additive,
-                ch2_additive);
 
   // 根据叠加混合比例插值
   ch1_brightness = ((ch1_linear * (LED_TEMP_SPRI_TOTAL - CCT_ADDITIVE_BLEND)) +
@@ -128,9 +124,6 @@ void calculateChannelRatio(uint16_t colorTemp, uint16_t brightness,
     ch1_brightness = LED_MAX_BRIGHTNESS;
   if (ch2_brightness > LED_MAX_BRIGHTNESS)
     ch2_brightness = LED_MAX_BRIGHTNESS;
-
-  serial_printf("ch1_brightness: %d, ch2_brightness: %d\r\n", ch1_brightness,
-                ch2_brightness);
 
   // 分别对每个通道进行伽马校正
   *ch1PWM = (ch1_brightness > 0) ? gammaTable[ch1_brightness] : 0;
@@ -562,18 +555,18 @@ int16_t lerp(int16_t current, int16_t target, int16_t step) {
 
 // 更新PWM输出
 void updatePWM() {
-  static uint32_t lastFadeTime = 0;
+  // static uint32_t lastFadeTime = 0;
   static uint16_t lastColorTemp = 0;
   static uint16_t lastBrightness = 0;
   static uint16_t cachedTarget1 = 0;
   static uint16_t cachedTarget2 = 0;
 
-  uint32_t now = HAL_GetTick();
+  // uint32_t now = HAL_GetTick();
 
-  if (now - lastFadeTime < PWM_FADE_INTERVAL_MS) {
-    return;
-  }
-  lastFadeTime = now;
+  // if (now - lastFadeTime < PWM_FADE_INTERVAL_MS) {
+  //   return;
+  // }
+  // lastFadeTime = now;
 
   // serial_printf("PWM Update\r\n");
 
@@ -588,9 +581,6 @@ void updatePWM() {
                             &cachedTarget2);
       lastColorTemp = state.colorTemp;
       lastBrightness = state.brightness;
-
-      serial_printf("New Targets: CH1=%d, CH2=%d\r\n", cachedTarget1,
-                    cachedTarget2);
     }
     target1 = cachedTarget1;
     target2 = cachedTarget2;
@@ -617,8 +607,6 @@ void updatePWM() {
   set_pwm2(out2);
 }
 
-unsigned char btn_changed = 0;
-
 // 程序主循环
 void loop() {
   // 喂狗，重置看门狗计时器
@@ -631,8 +619,8 @@ void loop() {
 
   if (btn_changed) {
     lastChanged = now;
-    btn_changed = 0;
     u8g2.setContrast(255);
+    btn_changed = 0;
   }
 
   static uint32_t lastDisplayUpdate = 0;
@@ -642,7 +630,7 @@ void loop() {
     updateDisp();
     lastDisplayUpdate = now;
   }
-  updatePWM();
+  // updatePWM();
   updateADC();
 
   // 息屏处理

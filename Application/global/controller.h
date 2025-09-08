@@ -28,8 +28,8 @@
 
 // PWM 缓变
 #define MAX_PWM 6100            // 最大PWM值
-#define PWM_FADE_STEP 128       // PWM 每次缓变最大值
-#define PWM_FADE_INTERVAL_MS 32 // 每隔32ms更新一次PWM值
+#define PWM_FADE_STEP 256       // PWM 每次缓变最大值
+// #define PWM_FADE_INTERVAL_MS 32 // 每隔32ms更新一次PWM值
 
 // 色温参数 (Color temperature parameters)
 #define COLOR_TEMP_MIN 3000         // 最低色温 (通道1)
@@ -91,6 +91,8 @@ void handleEnc(EncoderDirection_t direction, int32_t steps,
                EncoderSpeed_t speed);
 
 void loop();
+
+void updatePWM();
 
 void set_pwm1(uint16_t value);
 void set_pwm2(uint16_t value);

@@ -35,5 +35,9 @@ void App_Loop(void);
  */
 void App_ResetStats(void);
 
+/**
+ * @brief On TIM3 interrupt, increment the capture count
+ */
+void App_TIM3_IRQHandler(void);
 
 #endif /* __APP_H__ */
