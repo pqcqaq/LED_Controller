@@ -350,8 +350,8 @@ static void button_click_handler() { handleClick(); }
 static void button_long_press_handler(uint32_t duration_ms) {
   // snprintf(last_event_text, sizeof(last_event_text), "Long Press %ums",
   //          (unsigned int)duration_ms);
-  // serial_printf("Button Long Press Duration: %u ms\r\n",
-  //               (unsigned int)duration_ms);
+  serial_printf("Button Long Press Duration: %u ms\r\n",
+                (unsigned int)duration_ms);
   handleLongPress();
 }
 
