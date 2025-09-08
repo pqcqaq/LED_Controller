@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <stdio.h>
+#include <sys/_types.h>
 
 // constrain宏定义
 #ifndef constrain
@@ -234,50 +235,45 @@ void updateADC() {
 
     lastUpdateFanTime = now;
     // 以下是模拟PWM与风扇控制
-    if (state.master) {
-      if (!state.fanAuto) {
-        // digitalWrite(FAN_EN, HIGH);
-        open_fan();
-        return;
-      }
-      int16_t tempNow = state.temp;
-      if (tempNow < FAN_START_TEMP) {
-        // digitalWrite(FAN_EN, LOW);
-        close_fan();
-        return;
-      }
-      if (tempNow > FAN_FULL_TEMP) {
-        // digitalWrite(FAN_EN, HIGH);
-        open_fan();
-        return;
-      }
+    if (!state.fanAuto) {
+      // digitalWrite(FAN_EN, HIGH);
+      open_fan();
+      return;
+    }
+    int16_t tempNow = state.temp;
+    if (tempNow < FAN_START_TEMP) {
+      // digitalWrite(FAN_EN, LOW);
+      close_fan();
+      return;
+    }
+    if (tempNow > FAN_FULL_TEMP) {
+      // digitalWrite(FAN_EN, HIGH);
+      open_fan();
+      return;
+    }
 
-      // PWM控制：固定总周期数，根据温度分配开启/关闭次数
-      static uint16_t cycleCounter = 0;
+    // PWM控制：固定总周期数，根据温度分配开启/关闭次数
+    static uint16_t cycleCounter = 0;
 
-      // 根据温度计算占空比 (0-100)
-      uint16_t tempRange = FAN_FULL_TEMP - FAN_START_TEMP;
-      uint16_t tempOffset = tempNow - FAN_START_TEMP;
-      uint16_t dutyCycle = (tempOffset * 100) / tempRange; // 0-100的占空比
+    // 根据温度计算占空比 (0-100)
+    uint16_t tempRange = FAN_FULL_TEMP - FAN_START_TEMP;
+    uint16_t tempOffset = tempNow - FAN_START_TEMP;
+    uint16_t dutyCycle = (tempOffset * 100) / tempRange; // 0-100的占空比
 
-      // 计算开启周期数
-      uint16_t onCycles = (dutyCycle * TOTAL_CYCLES) / 100;
+    // 计算开启周期数
+    uint16_t onCycles = (dutyCycle * TOTAL_CYCLES) / 100;
 
-      // PWM输出控制
-      cycleCounter++;
-      if (cycleCounter > TOTAL_CYCLES) {
-        cycleCounter = 1; // 重新开始周期
-      }
+    // PWM输出控制
+    cycleCounter++;
+    if (cycleCounter > TOTAL_CYCLES) {
+      cycleCounter = 1; // 重新开始周期
+    }
 
-      if (cycleCounter <= onCycles) {
-        // digitalWrite(FAN_EN, HIGH);  // 开启阶段
-        open_fan();
-      } else {
-        // digitalWrite(FAN_EN, LOW);   // 关闭阶段
-        close_fan();
-      }
+    if (cycleCounter <= onCycles) {
+      // digitalWrite(FAN_EN, HIGH);  // 开启阶段
+      open_fan();
     } else {
-      // digitalWrite(FAN_EN, LOW);   // 关闭
+      // digitalWrite(FAN_EN, LOW);   // 关闭阶段
       close_fan();
     }
   }
@@ -621,6 +617,8 @@ void updatePWM() {
   set_pwm2(out2);
 }
 
+unsigned char btn_changed = 0;
+
 // 程序主循环
 void loop() {
   // 喂狗，重置看门狗计时器
@@ -631,12 +629,11 @@ void loop() {
 
   // handleButton();
 
-  // if (enc.changed) {
-  //   handleEnc();
-  //   enc.changed = false;
-  //   lastChanged = now;
-  //   u8x8.setContrast(255);
-  // }
+  if (btn_changed) {
+    lastChanged = now;
+    btn_changed = 0;
+    u8g2.setContrast(255);
+  }
 
   static uint32_t lastDisplayUpdate = 0;
 
@@ -651,7 +648,7 @@ void loop() {
   // 息屏处理
   if (now - lastChanged > SLEEP_TIME_MS) {
     // if(state.master){
-    // u8x8.setContrast(1);
+    u8g2.setContrast(1);
     // } else {
     // }
   }
