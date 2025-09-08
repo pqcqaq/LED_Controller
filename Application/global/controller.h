@@ -27,8 +27,8 @@
 #define VCC_MV 3300L      // 电源电压 (mV)
 
 // PWM 缓变
-#define MAX_PWM 6100            // 最大PWM值
-#define PWM_FADE_STEP 256       // PWM 每次缓变最大值
+#define MAX_PWM 6100      // 最大PWM值
+#define PWM_FADE_STEP 256 // PWM 每次缓变最大值
 // #define PWM_FADE_INTERVAL_MS 32 // 每隔32ms更新一次PWM值
 
 // 色温参数 (Color temperature parameters)
@@ -53,6 +53,28 @@
 #define TEMP_ADC_PIN GPIO_PIN_0
 #define FAN_EN_PORT GPIOA     // 风扇启用端口
 #define FAN_EN_PIN GPIO_PIN_4 // 风扇启用引脚
+
+#define colorTempToMired(colorTemp)                                            \
+  (1000000L * 10 / colorTemp) // 色温到mired值转换 (避免浮点运算)
+
+#define get_temperature_int(temp_x100) (temp_x100 / 100)
+#define get_temperature_frac(temp_x100)                                        \
+  ({                                                                           \
+    int32_t abs_temp = (temp_x100 < 0) ? -temp_x100 : temp_x100;               \
+    abs_temp % 100;                                                             \
+  })
+
+#define set_pwm1(value) __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, value)
+#define set_pwm2(value) __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, value)
+
+#define open_fan() HAL_GPIO_WritePin(FAN_EN_PORT, FAN_EN_PIN, GPIO_PIN_SET)
+#define close_fan() HAL_GPIO_WritePin(FAN_EN_PORT, FAN_EN_PIN, GPIO_PIN_RESET)
+
+// constrain宏定义
+#ifndef constrain
+#define constrain(amt, low, high)                                              \
+  ((amt) < (low) ? (low) : ((amt) > (high) ? (high) : (amt)))
+#endif
 
 // 系统状态结构体 (System state struct)
 typedef struct {
@@ -93,8 +115,3 @@ void handleEnc(EncoderDirection_t direction, int32_t steps,
 void loop();
 
 void updatePWM();
-
-void set_pwm1(uint16_t value);
-void set_pwm2(uint16_t value);
-void open_fan();
-void close_fan();

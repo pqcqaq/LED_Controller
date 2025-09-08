@@ -12,12 +12,6 @@
 #include <stdio.h>
 #include <sys/_types.h>
 
-// constrain宏定义
-#ifndef constrain
-#define constrain(amt, low, high)                                              \
-  ((amt) < (low) ? (low) : ((amt) > (high) ? (high) : (amt)))
-#endif
-
 SystemState state = {
     false, true, BRIGHTNESS_DEFAULT, COLOR_TEMP_DEFAULT, 0, 0, 1, 0, 0};
 SystemState lastState = {true, false, LED_MAX_BRIGHTNESS,
@@ -64,11 +58,6 @@ void handleLongPress() {
   // enc.pos = 0;
   state.master = !state.master;
   serial_printf("Master Power: %s\r\n", state.master ? "ON" : "OFF");
-}
-
-// 色温到mired值转换 (避免浮点运算)
-int32_t colorTempToMired(uint16_t colorTemp) {
-  return (1000000L * 10) / colorTemp; // 返回mired*10
 }
 
 // 计算色温对应的两个通道比例
@@ -188,23 +177,6 @@ int32_t adc_to_temperature_fast(uint16_t adc_value) {
   return result;
 }
 
-/**
- * @brief 获取温度的整数部分
- * @param temp_x100 温度值×100
- * @return 温度整数部分
- */
-int32_t get_temperature_int(int32_t temp_x100) { return temp_x100 / 100; }
-
-/**
- * @brief 获取温度的小数部分
- * @param temp_x100 温度值×100
- * @return 温度小数部分×100
- */
-uint32_t get_temperature_frac(int32_t temp_x100) {
-  int32_t abs_temp = (temp_x100 < 0) ? -temp_x100 : temp_x100;
-  return abs_temp % 100;
-}
-
 // 更新ADC读取数据
 void updateADC() {
   static uint32_t lastUpdateADCTime = 0;
@@ -290,6 +262,8 @@ void handleEnc(EncoderDirection_t direction, int32_t steps,
 
   //   if (abs(steps) >= ENCODER_STEPS_PER_CLICK) {
   //     int dir = (steps > 0) ? 1 : -1;
+
+  btn_changed = 1;
 
   serial_printf("Encoder Event: Dir=%d, Steps=%d, Speed=%d\r\n", (int)direction,
                 (int)steps, (int)speed);
@@ -480,9 +454,13 @@ void updateDisp() {
 
   // 亮度显示（右侧）
   char brightStr[8];
-  int brightPercent = (state.brightness * 1000 + LED_MAX_BRIGHTNESS / 2) /
-                      LED_MAX_BRIGHTNESS; // +127实现四舍五入
-  sprintf(brightStr, "%2d.%d%%", brightPercent / 10, brightPercent % 10);
+  if (state.brightness == LED_MAX_BRIGHTNESS) {
+    sprintf(brightStr, "100%%");
+  } else {
+    int brightPercent = (state.brightness * 1000 + LED_MAX_BRIGHTNESS / 2) /
+                        LED_MAX_BRIGHTNESS; // +127实现四舍五入
+    sprintf(brightStr, "%2d.%d%%", brightPercent / 10, brightPercent % 10);
+  }
 
   // 如果亮度被选中，绘制反色背景
   if (state.item == 2) {
@@ -641,15 +619,3 @@ void loop() {
     // }
   }
 }
-
-void set_pwm1(uint16_t value) {
-  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, value);
-}
-
-void set_pwm2(uint16_t value) {
-  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, value);
-}
-
-void open_fan() { HAL_GPIO_WritePin(FAN_EN_PORT, FAN_EN_PIN, GPIO_PIN_SET); }
-
-void close_fan() { HAL_GPIO_WritePin(FAN_EN_PORT, FAN_EN_PIN, GPIO_PIN_RESET); }
