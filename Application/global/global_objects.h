@@ -11,11 +11,15 @@
 /* Includes ------------------------------------------------------------------*/
 #include "drivers/button.h"
 #include "drivers/encoder.h"
+#include "stm32_u8g2.h"
 
 /* Global Objects ------------------------------------------------------------*/
 
 // Global encoder instance
 extern RotaryEncoder rotary_encoder;
+
+// Global U8G2 display instance
+extern STM32_U8G2_Display u8g2;
 
 // Global button instance
 extern Button encoder_button;

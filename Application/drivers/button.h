@@ -52,6 +52,7 @@ class Button {
 public:
     // Callback function types
     using EventCallback = std::function<void(ButtonEvent_t event, ButtonState_t state)>;
+    using ClickCallback = std::function<void()>;
     using LongPressCallback = std::function<void(uint32_t duration_ms)>;
     using MultiClickCallback = std::function<void(uint8_t click_count)>;
 
@@ -81,6 +82,7 @@ private:
     
     // Callbacks
     EventCallback event_callback_;
+    ClickCallback click_callback_;
     LongPressCallback long_press_callback_;
     MultiClickCallback multi_click_callback_;
     
@@ -126,7 +128,13 @@ public:
      * @param callback Event callback function
      */
     void setEventCallback(EventCallback callback);
-    
+
+    /**
+     * @brief Register click callback
+     * @param callback Click callback function
+     */
+    void handleClick(ClickCallback callback);
+
     /**
      * @brief Register long press callback
      * @param callback Long press callback function

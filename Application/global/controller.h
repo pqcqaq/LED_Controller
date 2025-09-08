@@ -1,0 +1,98 @@
+
+// bool
+#include <stdbool.h>
+// uint8_t, uint16_t, etc.
+#include "drivers/encoder.h"
+#include <stdint.h>
+
+// 时间参数 (Time parameters)
+#define DISPLAY_UPDATE_MS 50   // 显示屏更新间隔，单位毫秒
+#define ANIMATION_FRAME_MS 250 // 动画帧间隔，单位毫秒
+#define SLEEP_TIME_MS 3000     // 屏幕息屏时间
+
+// ADC相关
+#define ADC_POW 12             // ADC读取精度
+#define ADC_READ_INTERVAL 250  // ADC读取间隔
+#define FAN_START_TEMP 4500    // 风扇开始旋转的温度 x100
+#define FAN_FULL_TEMP 8000     // 风扇满速的温度    x100
+#define FAN_UPDATE_INTERVAL 50 // 风扇状态更新间隔
+#define TOTAL_CYCLES 20        // 多少次循环为一个周期
+
+// NTC参数定义
+#define R0_OHMS 100000L   // 25℃时NTC电阻值 (100K)
+#define T0_KELVIN 298150L // 25℃对应的开尔文温度×1000 (298.15K×1000)
+#define B_VALUE 3950L     // B值
+#define R_PULLUP 100000L  // 上拉电阻值 (100K)
+#define ADC_MAX 4095L     // 12位ADC最大值
+#define VCC_MV 3300L      // 电源电压 (mV)
+
+// PWM 缓变
+#define MAX_PWM 6100            // 最大PWM值
+#define PWM_FADE_STEP 128       // PWM 每次缓变最大值
+#define PWM_FADE_INTERVAL_MS 32 // 每隔32ms更新一次PWM值
+
+// 色温参数 (Color temperature parameters)
+#define COLOR_TEMP_MIN 3000         // 最低色温 (通道1)
+#define COLOR_TEMP_MAX 5700         // 最高色温 (通道2)
+#define COLOR_TEMP_DEFAULT 4500     // 默认色温
+#define BRIGHTNESS_DEFAULT 100      // 默认亮度
+#define LED_TEMP_STEP 10            // 色温调节步进
+#define LED_TEMP_WEIGHT_TOTAL 1024L // 调节总权重
+#define LED_TEMP_SPRI_TOTAL 550     // 离散度
+#define CCT_ADDITIVE_BLEND 255      // 推荐100%的叠加混合
+#define LED_MAX_BRIGHTNESS 512      // LED最大亮度值
+
+// 温度查找表定义
+#define TEMP_TABLE_SIZE 30
+
+// 硬件引脚定义 (Hardware pin definitions)
+#define TEMP_ADC_CHANNEL                                                       \
+  ADC_CHANNEL_0 // 温度传感器ADC通道
+                // PA0 - ADC1_IN0
+#define TEMP_ADC_PORT GPIOA
+#define TEMP_ADC_PIN GPIO_PIN_0
+#define FAN_EN_PORT GPIOA     // 风扇启用端口
+#define FAN_EN_PIN GPIO_PIN_4 // 风扇启用引脚
+
+// 系统状态结构体 (System state struct)
+typedef struct {
+  // === 核心控制参数 ===
+  bool master;         // 主开关状态
+  bool fanAuto;        // 风扇自动控制
+  uint16_t brightness; // 亮度值 (0-100%)
+  uint16_t colorTemp;  // 色温值 (3000-5700K)
+
+  // === PWM输出值 ===
+  uint16_t currentCh1PWM; // 通道1的当前PWM值 (0-32767)
+  uint16_t currentCh2PWM; // 通道2的当前PWM值 (0-32767)
+
+  // === 用户界面状态 ===
+  uint8_t item; // 当前选中的项目 (0=主开关, 1=色温, 2=亮度)
+  int8_t edit;  // 编辑模式 (-1=导航模式, 0=编辑值)
+
+  // === 传感器数据 ===
+  int32_t temp; // ADC读取到的温度
+} SystemState;
+
+extern SystemState state;
+extern SystemState lastState;
+
+// 处理按钮单击事件
+void handleClick();
+
+// 处理按钮双击事件
+void handleDoubleClick();
+
+// 处理按钮长按事件
+void handleLongPress();
+
+// 波轮事件
+void handleEnc(EncoderDirection_t direction, int32_t steps,
+               EncoderSpeed_t speed);
+
+void loop();
+
+void set_pwm1(uint16_t value);
+void set_pwm2(uint16_t value);
+void open_fan();
+void close_fan();

@@ -7,8 +7,12 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "global_objects.h"
+#include "stm32_u8g2.h"
 
 /* Global Objects ------------------------------------------------------------*/
+
+// U8G2 显示对象
+STM32_U8G2_Display u8g2;
 
 // Global button instance (encoder button)
 Button encoder_button(GPIOB, GPIO_PIN_14, true);
