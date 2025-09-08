@@ -13,52 +13,12 @@
 #include <sys/_types.h>
 
 SystemState state = {
-    false, true, BRIGHTNESS_DEFAULT, COLOR_TEMP_DEFAULT, 0, 0, 1, 0, 0};
-SystemState lastState = {true, false, LED_MAX_BRIGHTNESS,
-                         255,  32767, 32767,
-                         127,  127,   127}; // 初始化为不同值，确保首次更新
+    false, true, BRIGHTNESS_DEFAULT, COLOR_TEMP_DEFAULT, 0, 0, 0, 0, 1, 0, 0};
+SystemState lastState = {
+    true, false, LED_MAX_BRIGHTNESS, 255, 32767, 32767, 0, 0, 127,
+    127,  127}; // 初始化为不同值，确保首次更新
 
 unsigned char btn_changed = 0;
-
-// 处理按钮单击事件 - 在色温和亮度之间切换，始终编辑状态
-void handleClick() {
-  btn_changed = 1;
-
-  // 只在色温(1)和亮度(2)之间切换
-  if (state.item == 1) {
-    state.item = 2; // 从色温切换到亮度
-    serial_printf("Switched to Brightness\r\n");
-  } else {
-    state.item = 1; // 从亮度或开关切换到色温
-    serial_printf("Switched to Color Temperature\r\n");
-  }
-
-  // 始终保持编辑状态
-  state.edit = 0;
-}
-
-// 处理按钮双击事件 - 开关输出
-void handleDoubleClick() {
-  btn_changed = 1;
-  // 双击切换主开关状态
-  // state.master = !state.master;
-  // state.edit = -1; // 退出编辑模式
-  state.fanAuto = !state.fanAuto;
-  serial_printf("Fan Auto Mode: %s\r\n", state.fanAuto ? "ON" : "OFF");
-}
-
-// 处理按钮长按事件 - 开机/关机
-void handleLongPress() {
-  btn_changed = 1;
-  // state.master = false;
-  // state.colorTemp = COLOR_TEMP_DEFAULT;
-  // state.brightness = BRIGHTNESS_DEFAULT;
-  // state.item = 0;
-  // state.edit = -1;
-  // enc.pos = 0;
-  state.master = !state.master;
-  serial_printf("Master Power: %s\r\n", state.master ? "ON" : "OFF");
-}
 
 // 计算色温对应的两个通道比例
 // 修正后的色温通道比例计算函数
@@ -117,6 +77,52 @@ void calculateChannelRatio(uint16_t colorTemp, uint16_t brightness,
   // 分别对每个通道进行伽马校正
   *ch1PWM = (ch1_brightness > 0) ? gammaTable[ch1_brightness] : 0;
   *ch2PWM = (ch2_brightness > 0) ? gammaTable[ch2_brightness] : 0;
+}
+
+// 处理按钮单击事件 - 在色温和亮度之间切换，始终编辑状态
+void handleClick() {
+  btn_changed = 1;
+
+  // 只在色温(1)和亮度(2)之间切换
+  if (state.item == 1) {
+    state.item = 2; // 从色温切换到亮度
+    serial_printf("Switched to Brightness\r\n");
+  } else {
+    state.item = 1; // 从亮度或开关切换到色温
+    serial_printf("Switched to Color Temperature\r\n");
+  }
+
+  // 始终保持编辑状态
+  state.edit = 0;
+}
+
+// 处理按钮双击事件 - 开关输出
+void handleDoubleClick() {
+  btn_changed = 1;
+  // 双击切换主开关状态
+  // state.master = !state.master;
+  // state.edit = -1; // 退出编辑模式
+  state.fanAuto = !state.fanAuto;
+  serial_printf("Fan Auto Mode: %s\r\n", state.fanAuto ? "ON" : "OFF");
+}
+
+// 处理按钮长按事件 - 开机/关机
+void handleLongPress() {
+  btn_changed = 1;
+  // state.master = false;
+  // state.colorTemp = COLOR_TEMP_DEFAULT;
+  // state.brightness = BRIGHTNESS_DEFAULT;
+  // state.item = 0;
+  // state.edit = -1;
+  // enc.pos = 0;
+  state.master = !state.master;
+  serial_printf("Master Power: %s\r\n", state.master ? "ON" : "OFF");
+
+  if (state.master) {
+    // 开机的时候要重新设置目标PWM
+    calculateChannelRatio(state.colorTemp, state.brightness,
+                          &state.targetCh1PWM, &state.targetCh2PWM);
+  }
 }
 
 /**
@@ -531,58 +537,42 @@ int16_t lerp(int16_t current, int16_t target, int16_t step) {
   }
 }
 
+void calcPWM() {
+  static uint16_t lastCalcTime = 0;
+  uint32_t now = HAL_GetTick();
+  if (now - lastCalcTime > CALC_PWM_INTERVAL_MS) {
+    // 只有在参数变化时才重新计算
+    if (state.master) {
+      if ((state.colorTemp != lastState.colorTemp ||
+           state.brightness != lastState.brightness)) {
+        serial_printf("Calculating PWM: ColorTemp=%dK, Brightness=%d%%\r\n",
+                      state.colorTemp, state.brightness);
+        calculateChannelRatio(state.colorTemp, state.brightness,
+                              &state.targetCh1PWM, &state.targetCh2PWM);
+        lastState.colorTemp = state.colorTemp;
+        lastState.brightness = state.brightness;
+        lastState.targetCh1PWM = state.targetCh1PWM;
+        lastState.targetCh2PWM = state.targetCh2PWM;
+      }
+    } else {
+      state.targetCh1PWM = 0;
+      state.targetCh2PWM = 0;
+    }
+    lastCalcTime = now;
+  }
+}
+
 // 更新PWM输出
 void updatePWM() {
-  // static uint32_t lastFadeTime = 0;
-  static uint16_t lastColorTemp = 0;
-  static uint16_t lastBrightness = 0;
-  static uint16_t cachedTarget1 = 0;
-  static uint16_t cachedTarget2 = 0;
-
-  // uint32_t now = HAL_GetTick();
-
-  // if (now - lastFadeTime < PWM_FADE_INTERVAL_MS) {
-  //   return;
-  // }
-  // lastFadeTime = now;
-
-  // serial_printf("PWM Update\r\n");
-
-  // 计算目标PWM值 - 只有在参数变化时才重新计算
-  uint16_t target1, target2;
-
-  if (state.master) {
-    // 检查colorTemp和brightness是否发生变化
-    if (state.colorTemp != lastColorTemp ||
-        state.brightness != lastBrightness) {
-      calculateChannelRatio(state.colorTemp, state.brightness, &cachedTarget1,
-                            &cachedTarget2);
-      lastColorTemp = state.colorTemp;
-      lastBrightness = state.brightness;
-    }
-    target1 = cachedTarget1;
-    target2 = cachedTarget2;
-  } else {
-    target1 = target2 = 0;
-    // 当master为false时，清空缓存避免状态混乱
-    lastColorTemp = 0;
-    lastBrightness = 0;
-    cachedTarget1 = 0;
-    cachedTarget2 = 0;
-  }
-
   // 平滑过渡
-  state.currentCh1PWM = lerp(state.currentCh1PWM, target1, PWM_FADE_STEP);
-  state.currentCh2PWM = lerp(state.currentCh2PWM, target2, PWM_FADE_STEP);
+  state.currentCh1PWM =
+      lerp(state.currentCh1PWM, state.targetCh1PWM, PWM_FADE_STEP);
+  state.currentCh2PWM =
+      lerp(state.currentCh2PWM, state.targetCh2PWM, PWM_FADE_STEP);
 
   // 输出到硬件
-  uint16_t out1 = constrain(state.currentCh1PWM, 0, MAX_PWM);
-  // analogWrite(LED1_PIN, out1);
-  set_pwm1(out1);
-
-  uint16_t out2 = constrain(state.currentCh2PWM, 0, MAX_PWM);
-  // analogWrite(LED2_PIN, out2);
-  set_pwm2(out2);
+  set_pwm1(state.currentCh1PWM);
+  set_pwm2(state.currentCh2PWM);
 }
 
 // 程序主循环
@@ -609,6 +599,7 @@ void loop() {
     lastDisplayUpdate = now;
   }
   // updatePWM();
+  calcPWM();
   updateADC();
 
   // 息屏处理

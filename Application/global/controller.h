@@ -30,6 +30,7 @@
 #define MAX_PWM 6100      // 最大PWM值
 #define PWM_FADE_STEP 256 // PWM 每次缓变最大值
 // #define PWM_FADE_INTERVAL_MS 32 // 每隔32ms更新一次PWM值
+#define CALC_PWM_INTERVAL_MS 50 // 每隔50ms计算一次目标PWM值
 
 // 色温参数 (Color temperature parameters)
 #define COLOR_TEMP_MIN 3000         // 最低色温 (通道1)
@@ -87,6 +88,9 @@ typedef struct {
   // === PWM输出值 ===
   uint16_t currentCh1PWM; // 通道1的当前PWM值 (0-32767)
   uint16_t currentCh2PWM; // 通道2的当前PWM值 (0-32767)
+
+  uint16_t targetCh1PWM; // 通道1的目标PWM值 (0-32767)
+  uint16_t targetCh2PWM; // 通道2的目标PWM值 (0-32767)
 
   // === 用户界面状态 ===
   uint8_t item; // 当前选中的项目 (0=主开关, 1=色温, 2=亮度)
