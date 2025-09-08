@@ -12,7 +12,7 @@
 
 /* Global Objects ------------------------------------------------------------*/
 
-uint16_t adc_value = 0; // ADC采样值
+uint16_t adc_value = 0;          // ADC采样值
 unsigned char adc_done_flag = 0; // ADC转换完成标志
 
 // U8G2 显示对象
@@ -24,7 +24,7 @@ Button encoder_button(GPIOB, GPIO_PIN_14, true);
 // Global rotary encoder instance
 // Pin configuration: PA (PB12), PB (PB13), Button (PB14)
 RotaryEncoder rotary_encoder(GPIOB, GPIO_PIN_12, // Pin A
-                             GPIOB, GPIO_PIN_13   // Pin B
+                             GPIOB, GPIO_PIN_13  // Pin B
 );
 
 // PA5

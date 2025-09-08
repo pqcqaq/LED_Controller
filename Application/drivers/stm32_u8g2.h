@@ -37,15 +37,15 @@ class STM32_U8G2_Display : public U8G2 {
 public:
   STM32_U8G2_Display() : U8G2() {
     // 构造函数调用 u8g2_Setup 函数来初始化显示
-    u8g2_Setup_ssd1306_i2c_128x64_noname_f(&u8g2, U8G2_R0, u8x8_byte_hw_i2c, u8x8_gpio_and_delay);
+    u8g2_Setup_ssd1306_i2c_128x64_noname_f(&u8g2, U8G2_R0, u8x8_byte_hw_i2c,
+                                           u8x8_gpio_and_delay);
   }
-  
+
   void init() {
     u8g2_InitDisplay(&u8g2);     // 初始化显示
     u8g2_SetPowerSave(&u8g2, 0); // 关闭节能模式
     u8g2_ClearBuffer(&u8g2);     // 清空缓冲区
   }
 };
-
 
 #endif /* __STM32_U8G2_H */

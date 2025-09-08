@@ -15,7 +15,7 @@
 
 /* Global Objects ------------------------------------------------------------*/
 
-extern uint16_t adc_value; // ADC采样值
+extern uint16_t adc_value;          // ADC采样值
 extern unsigned char adc_done_flag; // ADC转换完成标志
 
 // Global encoder instance

@@ -8,12 +8,11 @@
 #ifndef __APP_H__
 #define __APP_H__
 
-
 /* Includes ------------------------------------------------------------------*/
-#include "main.h"
-#include "drivers/stm32_u8g2.h"
-#include "drivers/encoder.h"
 #include "drivers/button.h"
+#include "drivers/encoder.h"
+#include "drivers/stm32_u8g2.h"
+#include "main.h"
 #include <stdbool.h>
 
 /* Function prototypes -------------------------------------------------------*/
@@ -29,11 +28,6 @@ void App_Init(void);
  * @note This function is called repeatedly in the main while loop
  */
 void App_Loop(void);
-
-/**
- * @brief Reset button and encoder statistics
- */
-void App_ResetStats(void);
 
 /**
  * @brief On TIM3 interrupt, increment the capture count

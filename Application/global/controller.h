@@ -61,7 +61,7 @@
 #define get_temperature_frac(temp_x100)                                        \
   ({                                                                           \
     int32_t abs_temp = (temp_x100 < 0) ? -temp_x100 : temp_x100;               \
-    abs_temp % 100;                                                             \
+    abs_temp % 100;                                                            \
   })
 
 #define set_pwm1(value) __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, value)
