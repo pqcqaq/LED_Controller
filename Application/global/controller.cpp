@@ -6,6 +6,7 @@
 #include "temp_adc.h"
 #include "tim.h"
 #include "u8g2.h"
+#include <adc.h>
 #include <cstdint>
 #include <cstdlib>
 #include <stdio.h>
@@ -217,6 +218,13 @@ void updateADC() {
   if (now - lastUpdateADCTime > ADC_READ_INTERVAL) {
     lastUpdateADCTime = now;
     // state.temp = adc_to_temperature_fast(analogRead(TEMP_ADC));
+    // 这里可能是第二次循环才进来
+    if (adc_done_flag) {
+      state.temp = adc_to_temperature_fast(adc_value);
+      adc_done_flag = 0;
+    } else {
+      HAL_ADC_Start_IT(&hadc1); // 开启采样
+    }
   }
 
   static uint32_t lastUpdateFanTime = 0;
@@ -438,14 +446,14 @@ void updateDisp() {
     char tempStr[20];
 
     if (state.temp == -99900L) {
-      sprintf(tempStr, "Temp: --.-C");
+      sprintf(tempStr, "LED:--.-C");
     } else {
-      sprintf(tempStr, "Temp: %d.%02dC", temp_int, temp_frac);
+      sprintf(tempStr, "LED:%d.%02dC", temp_int, temp_frac);
     }
     u8g2.drawStr(0, 8, tempStr);
 
     // 风扇状态
-    const char *fan_status = state.fanAuto ? "AUTO" : "FORCE";
+    const char *fan_status = state.fanAuto ? " AUTO" : "FORCE";
     u8g2.drawStr(96, 8, fan_status);
 
     if (animUpdate) {
@@ -458,9 +466,9 @@ void updateDisp() {
   // 电源状态 - 居中大字体显示
   u8g2.setFont(u8g2_font_8x13B_tr);
   if (state.master) {
-    u8g2.drawStr(56, 24, "OUT");
+    u8g2.drawStr(54, 24, "OUT");
   } else {
-    u8g2.drawStr(56, 24, "OFF");
+    u8g2.drawStr(54, 24, "OFF");
   }
 
   // === 色温和亮度数值显示 ===
@@ -473,12 +481,12 @@ void updateDisp() {
   // 如果色温被选中，绘制反色背景
   if (state.item == 1) {
     u8g2.setDrawColor(1);
-    u8g2.drawBox(4, 14, 44, 14);
+    u8g2.drawBox(0, 14, 44, 14);
     u8g2.setDrawColor(0);
-    u8g2.drawStr(6, 26, tempStr);
+    u8g2.drawStr(2, 26, tempStr);
     u8g2.setDrawColor(1);
   } else {
-    u8g2.drawStr(6, 24, tempStr);
+    u8g2.drawStr(2, 24, tempStr);
   }
 
   // 亮度显示（右侧）
@@ -490,12 +498,12 @@ void updateDisp() {
   // 如果亮度被选中，绘制反色背景
   if (state.item == 2) {
     u8g2.setDrawColor(1);
-    u8g2.drawBox(86, 14, 38, 14);
+    u8g2.drawBox(82, 14, 44, 14);
     u8g2.setDrawColor(0);
-    u8g2.drawStr(88, 26, brightStr);
+    u8g2.drawStr(84, 26, brightStr);
     u8g2.setDrawColor(1);
   } else {
-    u8g2.drawStr(88, 24, brightStr);
+    u8g2.drawStr(84, 24, brightStr);
   }
 
   // === 标识符 ===

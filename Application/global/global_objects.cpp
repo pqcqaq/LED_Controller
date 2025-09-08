@@ -8,8 +8,12 @@
 /* Includes ------------------------------------------------------------------*/
 #include "global_objects.h"
 #include "stm32_u8g2.h"
+#include <sys/_types.h>
 
 /* Global Objects ------------------------------------------------------------*/
+
+uint16_t adc_value = 0; // ADC采样值
+unsigned char adc_done_flag = 0; // ADC转换完成标志
 
 // U8G2 显示对象
 STM32_U8G2_Display u8g2;

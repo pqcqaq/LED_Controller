@@ -26,11 +26,11 @@
 #include "usart.h"
 #include "usb_device.h"
 
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "app.h"
 #include "iwdg.h"
+#include <sys/_types.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -201,6 +201,16 @@ extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   default:
     // Unknown pin, ignore
     break;
+  }
+}
+
+extern unsigned char adc_done_flag;
+extern uint16_t adc_value; // ADC采样值
+extern "C" void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
+  if (hadc == &hadc1) {
+    adc_value = HAL_ADC_GetValue(hadc);
+    // HAL_ADC_Start_IT(&hadc1); // 需要的时候再开启ADC
+    adc_done_flag = 1; // 设置ADC完成标志
   }
 }
 
