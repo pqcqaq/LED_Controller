@@ -9,9 +9,18 @@
 #include "global_objects.h"
 #include "stm32_u8g2.h"
 #include <sys/_types.h>
+#include "global/controller.h"
 
 /* Global Objects ------------------------------------------------------------*/
 
+SystemState state = {
+    false, true, false, false, BRIGHTNESS_DEFAULT, COLOR_TEMP_DEFAULT, 0, 0, 0,
+    0,     1,    0,     0};
+SystemState lastState = {true, false, true,  true, LED_MAX_BRIGHTNESS,
+                         255,  32767, 32767, 0,    0,
+                         127,  127,   127}; // 初始化为不同值，确保首次更新
+                                            //
+                                            // 
 uint16_t adc_value = 0;          // ADC采样值
 unsigned char adc_done_flag = 0; // ADC转换完成标志
 

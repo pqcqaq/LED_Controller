@@ -12,12 +12,10 @@
 #include <stdio.h>
 #include <sys/_types.h>
 
-SystemState state = {
-    false, true, false, false, BRIGHTNESS_DEFAULT, COLOR_TEMP_DEFAULT, 0, 0, 0,
-    0,     1,    0,     0};
-SystemState lastState = {true, false, true,  true, LED_MAX_BRIGHTNESS,
-                         255,  32767, 32767, 0,    0,
-                         127,  127,   127}; // 初始化为不同值，确保首次更新
+// EEPROM集成函数声明
+extern "C" {
+  void Settings_MarkDirty(void);
+}
 
 unsigned char btn_changed = 0;
 
@@ -103,7 +101,13 @@ void handleDoubleClick() {
   // 双击切换主开关状态
   // state.master = !state.master;
   // state.edit = -1; // 退出编辑模式
+  bool old_fanAuto = state.fanAuto;
   state.fanAuto = !state.fanAuto;
+  
+  if (state.fanAuto != old_fanAuto) {
+    Settings_MarkDirty(); // 标记设置需要保存
+  }
+  
   serial_printf("Fan Auto Mode: %s\r\n", state.fanAuto ? "ON" : "OFF");
 }
 
@@ -281,31 +285,30 @@ void handleEnc(EncoderDirection_t direction, int32_t steps,
     // lastTime = millis();
 
     if (state.item == 1) { // 色温调节
-      // uint16_t step = (td > SPEED_SLOW_THRESHOLD) ? LED_TEMP_STEP :
-      //                (td > SPEED_FAST_THRESHOLD) ? LED_TEMP_STEP * 2 :
-      //                (td > SPEED_VERY_FAST_THRESHOLD) ? LED_TEMP_STEP * 3
-      //                :  LED_TEMP_STEP * 4;
-      // state.colorTemp = constrain(state.colorTemp + dir * step,
-      // COLOR_TEMP_MIN, COLOR_TEMP_MAX);
+      uint16_t old_colorTemp = state.colorTemp;
       state.colorTemp =
           constrain((direction == ENCODER_DIR_CW
                          ? state.colorTemp + steps * LED_TEMP_STEP
                          : state.colorTemp - steps * LED_TEMP_STEP),
                     COLOR_TEMP_MIN, COLOR_TEMP_MAX);
 
+      if (state.colorTemp != old_colorTemp) {
+        Settings_MarkDirty(); // 标记设置需要保存
+      }
+
       serial_printf("Color Temp: %dK, last Step: %d\r\n", state.colorTemp,
                     (direction == ENCODER_DIR_CW ? steps : -steps));
 
     } else if (state.item == 2) { // 亮度调节
-      // byte step = (td > SPEED_SLOW_THRESHOLD) ? 1 :
-      //            (td > SPEED_FAST_THRESHOLD) ? 5 :
-      //            (td > SPEED_VERY_FAST_THRESHOLD) ? 10 : 20;
-      // state.brightness = constrain(state.brightness + dir * step, 0,
-      // 100);
+      uint16_t old_brightness = state.brightness;
       state.brightness =
           constrain(direction == ENCODER_DIR_CW ? state.brightness + steps
                                                 : state.brightness - steps,
                     0, LED_MAX_BRIGHTNESS);
+
+      if (state.brightness != old_brightness) {
+        Settings_MarkDirty(); // 标记设置需要保存
+      }
 
       serial_printf("Brightness: %d%%, last Step: %d\r\n", state.brightness,
                     direction == ENCODER_DIR_CW ? steps : -steps);

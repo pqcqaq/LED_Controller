@@ -78,34 +78,6 @@
   ((amt) < (low) ? (low) : ((amt) > (high) ? (high) : (amt)))
 #endif
 
-// 系统状态结构体 (System state struct)
-typedef struct {
-  // === 核心控制参数 ===
-  bool master;         // 主开关状态
-  bool fanAuto;        // 风扇自动控制
-  bool isSleeping;     // 屏幕是否息屏
-  bool deepSleep;      // 进入深度睡眠
-  uint16_t brightness; // 亮度值 (0-100%)
-  uint16_t colorTemp;  // 色温值 (3000-5700K)
-
-  // === PWM输出值 ===
-  uint16_t currentCh1PWM; // 通道1的当前PWM值 (0-32767)
-  uint16_t currentCh2PWM; // 通道2的当前PWM值 (0-32767)
-
-  uint16_t targetCh1PWM; // 通道1的目标PWM值 (0-32767)
-  uint16_t targetCh2PWM; // 通道2的目标PWM值 (0-32767)
-
-  // === 用户界面状态 ===
-  uint8_t item; // 当前选中的项目 (0=主开关, 1=色温, 2=亮度)
-  int8_t edit;  // 编辑模式 (-1=导航模式, 0=编辑值)
-
-  // === 传感器数据 ===
-  int32_t temp; // ADC读取到的温度
-} SystemState;
-
-extern SystemState state;
-extern SystemState lastState;
-
 // 处理按钮单击事件
 void handleClick();
 

@@ -8,9 +8,11 @@
 /* Includes ------------------------------------------------------------------*/
 #include "app.h"
 #include "animations/boot_animation.h"
+#include "drivers/eeprom_integration.h"
 #include "drivers/iwdg_a.h"
 #include "global/controller.h"
 #include "global/global_objects.h"
+#include "hardware/devices.h"
 #include "stm32_u8g2.h"
 #include "tim.h"
 #include "u8g2.h"
@@ -20,6 +22,10 @@
 #include <cstdlib>
 #include <i2c.h>
 #include <stdio.h>
+
+/* Forward declarations ------------------------------------------------------*/
+extern void calculateChannelRatio(uint16_t colorTemp, uint16_t brightness,
+                                  uint16_t *ch1PWM, uint16_t *ch2PWM);
 
 /* Private variables ---------------------------------------------------------*/
 static uint32_t loop_counter = 0;
@@ -73,6 +79,7 @@ void Scan_I2C_Devices(void) {
   if (oled_ok) {
     u8g2.drawDisc(20, 30, 5, U8G2_DRAW_ALL);
     serial_printf("OLED 0x%02X: OK\r\n", OLED_ADDR);
+    devices.oled = true;
   } else {
     u8g2.drawXBMP(18, 28, 5, 5, u8g2_font_icon_5_t_bits); // 使用自定义叉号图标
     serial_printf("OLED 0x%02X: NO\r\n", OLED_ADDR);
@@ -89,6 +96,7 @@ void Scan_I2C_Devices(void) {
   if (adc_ok) {
     u8g2.drawDisc(60, 30, 5, U8G2_DRAW_ALL);
     serial_printf("ADC 0x%02X: OK\r\n", ADC_ADDR);
+    devices.extern_adc = true;
   } else {
     u8g2.drawXBMP(58, 28, 5, 5, u8g2_font_icon_5_t_bits);
     serial_printf("ADC 0x%02X: NO\r\n", ADC_ADDR);
@@ -105,6 +113,7 @@ void Scan_I2C_Devices(void) {
   if (eeprom_ok) {
     u8g2.drawDisc(100, 30, 5, U8G2_DRAW_ALL);
     serial_printf("EEPROM 0x%02X: OK\r\n", EEPROM_ADDR);
+    devices.eeprom = true;
   } else {
     u8g2.drawXBMP(98, 28, 5, 5, u8g2_font_icon_5_t_bits);
     serial_printf("EEPROM 0x%02X: NO\r\n", EEPROM_ADDR);
@@ -173,10 +182,13 @@ void App_Init(void) {
   // 扫描外设，在串口打印一下
   Scan_I2C_Devices();
 
+  Init_Devices();
+
   // 配置按键回调（面向对象）
   encoder_button.setEventCallback(button_event_handler);
-  encoder_button.handleClick(button_click_handler);               // 单击
-  encoder_button.handleLongPress(button_long_press_handler, 800); // 800毫秒长按
+  encoder_button.handleClick(button_click_handler); // 单击
+  encoder_button.handleLongPress(button_long_press_handler,
+                                 800); // 800毫秒长按
   encoder_button.handleMultiClick(5, button_multi_click_handler,
                                   400); // 最多5击，间隔400ms
 
@@ -266,7 +278,8 @@ void App_Loop(void) {
   //   serial_printf("  Encoder Stats - Total: %d, CW: %d, CCW: %d, Pos:
   //   %d\r\n",
   //                 (int)encoder_total_steps, (int)encoder_cw_steps,
-  //                 (int)encoder_ccw_steps, (int)rotary_encoder.getPosition());
+  //                 (int)encoder_ccw_steps,
+  //                 (int)rotary_encoder.getPosition());
 
   //   // 显示PWM输出值和占空比
   //   uint32_t pwm_ch1 = __HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_1);
@@ -292,6 +305,9 @@ void App_Loop(void) {
 
   // // 渲染显示内容
   // draw_button_encoder_test();
+
+  // 执行EEPROM自动保存任务
+  Settings_AutoSaveTask(&state);
 }
 
 /**
@@ -300,40 +316,23 @@ void App_Loop(void) {
 static void button_event_handler(ButtonEvent_t event, ButtonState_t state) {
   switch (event) {
   case BUTTON_EVENT_PRESS:
-    // button_press_count++;
-    // button_is_pressed = true;
-    // snprintf(last_event_text, sizeof(last_event_text), "Button Pressed");
-    // serial_printf("Button Event: PRESS (Count: %u)\r\n",
-    //               (unsigned int)button_press_count);
+    // 按键按下事件，无需特殊处理
     break;
 
   case BUTTON_EVENT_RELEASE:
-    // button_is_pressed = false;
-    // snprintf(last_event_text, sizeof(last_event_text), "Button Released");
-    // serial_printf("Button Event: RELEASE\r\n");
+    // 按键释放事件，无需特殊处理
     break;
 
   case BUTTON_EVENT_CLICK:
-    // button_click_count++;
-    // snprintf(last_event_text, sizeof(last_event_text), "Button Clicked");
-    // serial_printf("Button Event: CLICK (Count: %u)\r\n",
-    //               (unsigned int)button_click_count);
+    // 按键单击事件，无需特殊处理
     break;
 
   case BUTTON_EVENT_LONG_PRESS:
-    // button_long_press_count++;
-    // snprintf(last_event_text, sizeof(last_event_text), "Button Long Press");
-    // serial_printf("Button Event: LONG_PRESS (Count: %u)\r\n",
-    //               (unsigned int)button_long_press_count);
+    // 按键长按事件，无需特殊处理
     break;
 
   case BUTTON_EVENT_MULTI_CLICK:
-    // button_multi_click_count++;
-    // snprintf(last_event_text, sizeof(last_event_text), "Multi-Click (%u)",
-    //          (unsigned int)last_multi_click_count);
-    // serial_printf("Button Event: MULTI_CLICK (%u clicks, total: %u)\r\n",
-    //               (unsigned int)last_multi_click_count,
-    //               (unsigned int)button_multi_click_count);
+    // 按键多击事件，无需特殊处理
     break;
   }
 }
@@ -377,7 +376,8 @@ static void button_multi_click_handler(uint8_t click_count) {
 //   case ENCODER_EVENT_ROTATE_CW:
 //     // encoder_cw_steps += steps;
 //     // encoder_total_steps += steps;
-//     // snprintf(last_event_text, sizeof(last_event_text), "Encoder CW (%d)",
+//     // snprintf(last_event_text, sizeof(last_event_text), "Encoder CW
+//     (%d)",
 //     //          (int)steps);
 //     // serial_printf(
 //     //     "Encoder Event: ROTATE_CW (Steps: %d, Total: %d, Pos: %d)\r\n",
@@ -388,7 +388,8 @@ static void button_multi_click_handler(uint8_t click_count) {
 //   case ENCODER_EVENT_ROTATE_CCW:
 //     // encoder_ccw_steps += steps;
 //     // encoder_total_steps -= steps;
-//     // snprintf(last_event_text, sizeof(last_event_text), "Encoder CCW (%d)",
+//     // snprintf(last_event_text, sizeof(last_event_text), "Encoder CCW
+//     (%d)",
 //     //          (int)steps);
 //     // serial_printf(
 //     //     "Encoder Event: ROTATE_CCW (Steps: %d, Total: %d, Pos: %d)\r\n",
@@ -403,15 +404,11 @@ static void button_multi_click_handler(uint8_t click_count) {
  */
 static void encoder_rotation_handler(EncoderDirection_t direction,
                                      int32_t steps, EncoderSpeed_t speed) {
-  // current_encoder_speed = speed;
-  // const char *speed_str = (speed == ENCODER_SPEED_FAST)     ? "Fast"
-  //                         : (speed == ENCODER_SPEED_MEDIUM) ? "Medium"
-  //                                                           : "Slow";
-  // const char *dir_str = (direction == ENCODER_DIR_CW) ? "CW" : "CCW";
-
-  // serial_printf("Encoder Rotation: %s, Steps: %d, Speed: %s\r\n", dir_str,
-  //               (int)steps, speed_str);
+  // 调用控制器处理编码器事件
   handleEnc(direction, steps, speed);
+
+  // 标记设置为脏状态，需要保存
+  Settings_MarkDirty();
 }
 
 // /**
