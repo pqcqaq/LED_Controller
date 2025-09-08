@@ -6,9 +6,10 @@
 #include <stdint.h>
 
 // 时间参数 (Time parameters)
-#define DISPLAY_UPDATE_MS 50   // 显示屏更新间隔，单位毫秒
-#define ANIMATION_FRAME_MS 250 // 动画帧间隔，单位毫秒
-#define SLEEP_TIME_MS 3000     // 屏幕息屏时间
+#define DISPLAY_UPDATE_MS 50     // 显示屏更新间隔，单位毫秒
+#define ANIMATION_FRAME_MS 250   // 动画帧间隔，单位毫秒
+#define SLEEP_TIME_MS 15000      // 屏幕息屏时间
+#define DEEP_SLEEP_TIME_MS 60000 // 进入深度睡眠时间
 
 // ADC相关
 #define ADC_POW 12             // ADC读取精度
@@ -82,6 +83,8 @@ typedef struct {
   // === 核心控制参数 ===
   bool master;         // 主开关状态
   bool fanAuto;        // 风扇自动控制
+  bool isSleeping;     // 屏幕是否息屏
+  bool deepSleep;      // 进入深度睡眠
   uint16_t brightness; // 亮度值 (0-100%)
   uint16_t colorTemp;  // 色温值 (3000-5700K)
 

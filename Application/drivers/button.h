@@ -39,10 +39,11 @@ typedef enum {
 } ButtonEvent_t;
 
 /* Exported constants --------------------------------------------------------*/
-#define BUTTON_DEBOUNCE_TIME_MS 50            // Button debounce time
-#define BUTTON_DEFAULT_LONG_PRESS_TIME_MS 800 // Default long press threshold
-#define BUTTON_DEFAULT_MULTI_CLICK_GAP_MS 250 // Default multi-click gap time
-#define BUTTON_MAX_MULTI_CLICKS 5             // Maximum multi-click count
+#define BUTTON_DEBOUNCE_TIME_MS 50                 // Button debounce time
+#define BUTTON_DEFAULT_LONG_PRESS_TIME_MS 800      // Default long press threshold
+#define BUTTON_DEFAULT_LONG_PRESS_INTERVAL_MS 200  // Default continuous long press interval
+#define BUTTON_DEFAULT_MULTI_CLICK_GAP_MS 250      // Default multi-click gap time
+#define BUTTON_MAX_MULTI_CLICKS 5                  // Maximum multi-click count
 
 /* C++ Class Definition ------------------------------------------------------*/
 
@@ -81,6 +82,9 @@ private:
   // Long press configuration
   uint32_t long_press_time_ms_;
   bool long_press_enabled_;
+  bool long_press_continuous_;      // Enable continuous long press triggering
+  uint32_t long_press_interval_ms_; // Interval for continuous triggering
+  uint32_t last_long_press_time_;   // Last time long press was triggered
 
   // Callbacks
   EventCallback event_callback_;
@@ -144,6 +148,14 @@ public:
    */
   void handleLongPress(LongPressCallback callback,
                        uint32_t time_ms = BUTTON_DEFAULT_LONG_PRESS_TIME_MS);
+
+  /**
+   * @brief Set continuous long press mode
+   * @param continuous true to enable continuous triggering, false for single trigger
+   * @param interval_ms Interval between continuous triggers in milliseconds
+   */
+  void setContinuousLongPress(bool continuous, 
+                             uint32_t interval_ms = BUTTON_DEFAULT_LONG_PRESS_INTERVAL_MS);
 
   /**
    * @brief Register multi-click callback

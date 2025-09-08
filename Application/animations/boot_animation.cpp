@@ -18,6 +18,7 @@
 #include "boot_animation.h"
 #include "main.h"
 #include <string.h>
+#include "global/global_objects.h"
 
 /* Private variables ---------------------------------------------------------*/
 static STM32_U8G2_Display *g_display = nullptr;

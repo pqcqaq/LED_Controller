@@ -13,6 +13,9 @@
 #include "drivers/encoder.h"
 #include "stm32_u8g2.h"
 
+#define TITLE_TEXT "LED Controller" ///< Boot text to display
+#define AUTHOR_TEXT "by QCQCQC"     ///< Author text to display
+
 /* Global Objects ------------------------------------------------------------*/
 
 extern uint16_t adc_value;          // ADC采样值

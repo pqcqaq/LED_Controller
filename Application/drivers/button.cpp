@@ -24,7 +24,9 @@ Button::Button(GPIO_TypeDef *port, uint16_t pin, bool active_low)
       multi_click_gap_ms_(BUTTON_DEFAULT_MULTI_CLICK_GAP_MS),
       multi_click_pending_(false),
       long_press_time_ms_(BUTTON_DEFAULT_LONG_PRESS_TIME_MS),
-      long_press_enabled_(false), max_multi_clicks_(2),
+      long_press_enabled_(false), long_press_continuous_(false),
+      long_press_interval_ms_(BUTTON_DEFAULT_LONG_PRESS_INTERVAL_MS),
+      last_long_press_time_(0), max_multi_clicks_(2),
       multi_click_enabled_(false), interrupt_mode_enabled_(false) {}
 
 /**
@@ -38,6 +40,7 @@ void Button::init() {
   press_start_time_ = 0;
   debounce_active_ = false;
   long_press_triggered_ = false;
+  last_long_press_time_ = 0;
   click_count_ = 0;
   last_click_time_ = 0;
   multi_click_pending_ = false;
@@ -100,6 +103,17 @@ void Button::handleLongPress(LongPressCallback callback, uint32_t time_ms) {
 }
 
 /**
+ * @brief Set continuous long press mode
+ */
+void Button::setContinuousLongPress(bool continuous, uint32_t interval_ms) {
+  long_press_continuous_ = continuous;
+  long_press_interval_ms_ = interval_ms;
+
+  serial_printf("Button: Continuous long press %s (interval %u ms)\r\n",
+                continuous ? "enabled" : "disabled", (unsigned int)interval_ms);
+}
+
+/**
  * @brief Register multi-click callback
  */
 void Button::handleMultiClick(uint8_t max_clicks, MultiClickCallback callback,
@@ -140,6 +154,7 @@ uint32_t Button::getPressDuration() const {
  */
 void Button::disableLongPress() {
   long_press_enabled_ = false;
+  long_press_continuous_ = false;
   long_press_callback_ = nullptr;
 }
 
@@ -176,6 +191,7 @@ void Button::onGpioInterrupt() {
           // Button pressed
           press_start_time_ = current_time;
           long_press_triggered_ = false;
+          last_long_press_time_ = 0;
           triggerEvent(BUTTON_EVENT_PRESS);
         } else {
           // Button released
@@ -245,6 +261,7 @@ void Button::stateMachine() {
       // Button pressed
       press_start_time_ = current_time;
       long_press_triggered_ = false;
+      last_long_press_time_ = 0;
 
       triggerEvent(BUTTON_EVENT_PRESS);
 
@@ -270,15 +287,24 @@ void Button::stateMachine() {
   }
 
   // Check for long press
-  if (long_press_enabled_ && current_state_ == BUTTON_STATE_PRESSED &&
-      !long_press_triggered_) {
+  if (long_press_enabled_ && current_state_ == BUTTON_STATE_PRESSED) {
     uint32_t press_duration = current_time - press_start_time_;
-    if (press_duration >= long_press_time_ms_) {
+
+    if (!long_press_triggered_ && press_duration >= long_press_time_ms_) {
+      // First long press trigger
       long_press_triggered_ = true;
+      last_long_press_time_ = current_time;
       current_state_ = BUTTON_STATE_LONG_PRESSED;
 
       triggerEvent(BUTTON_EVENT_LONG_PRESS);
       triggerLongPress(press_duration);
+
+    } else if (long_press_triggered_ && long_press_continuous_) {
+      // Continuous long press triggering
+      if (current_time - last_long_press_time_ >= long_press_interval_ms_) {
+        last_long_press_time_ = current_time;
+        triggerLongPress(press_duration);
+      }
     }
   }
 }
@@ -358,19 +384,27 @@ void Button::triggerMultiClick(uint8_t click_count) {
  * @brief Check for long press (for interrupt mode)
  */
 void Button::checkLongPress() {
-  if (!long_press_enabled_ || current_state_ != BUTTON_STATE_PRESSED ||
-      long_press_triggered_) {
+  if (!long_press_enabled_ || current_state_ != BUTTON_STATE_PRESSED) {
     return;
   }
 
   uint32_t current_time = HAL_GetTick();
   uint32_t press_duration = current_time - press_start_time_;
 
-  if (press_duration >= long_press_time_ms_) {
+  if (!long_press_triggered_ && press_duration >= long_press_time_ms_) {
+    // First long press trigger
     long_press_triggered_ = true;
+    last_long_press_time_ = current_time;
     current_state_ = BUTTON_STATE_LONG_PRESSED;
 
     triggerEvent(BUTTON_EVENT_LONG_PRESS);
     triggerLongPress(press_duration);
+
+  } else if (long_press_triggered_ && long_press_continuous_) {
+    // Continuous long press triggering
+    if (current_time - last_long_press_time_ >= long_press_interval_ms_) {
+      last_long_press_time_ = current_time;
+      triggerLongPress(press_duration);
+    }
   }
 }

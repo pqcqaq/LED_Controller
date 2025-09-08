@@ -46,7 +46,6 @@ static const uint8_t u8g2_font_icon_5_t_bits[] = {
 
 void Scan_I2C_Devices(void) {
   HAL_StatusTypeDef status;
-  char buffer[50];
   bool oled_ok, adc_ok, eeprom_ok;
   const uint8_t OLED_ADDR = 0x78;
   const uint8_t ADC_ADDR = 0x43 << 1;

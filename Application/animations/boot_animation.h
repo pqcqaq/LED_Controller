@@ -99,8 +99,6 @@ typedef struct {
 // Trigonometric constants (scaled by 1000)
 #define PI_SCALED 3142              ///< PI * 1000
 #define PI_DIV_180_SCALED 17        ///< (PI/180) * 1000
-#define TITLE_TEXT "LED Controller" ///< Boot text to display
-#define AUTHOR_TEXT "by QCQCQC"     ///< Author text to display
 
 /* Exported variables --------------------------------------------------------*/
 

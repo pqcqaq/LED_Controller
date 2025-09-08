@@ -13,10 +13,11 @@
 #include <sys/_types.h>
 
 SystemState state = {
-    false, true, BRIGHTNESS_DEFAULT, COLOR_TEMP_DEFAULT, 0, 0, 0, 0, 1, 0, 0};
-SystemState lastState = {
-    true, false, LED_MAX_BRIGHTNESS, 255, 32767, 32767, 0, 0, 127,
-    127,  127}; // 初始化为不同值，确保首次更新
+    false, true, false, false, BRIGHTNESS_DEFAULT, COLOR_TEMP_DEFAULT, 0, 0, 0,
+    0,     1,    0,     0};
+SystemState lastState = {true, false, true,  true, LED_MAX_BRIGHTNESS,
+                         255,  32767, 32767, 0,    0,
+                         127,  127,   127}; // 初始化为不同值，确保首次更新
 
 unsigned char btn_changed = 0;
 
@@ -319,13 +320,232 @@ void handleEnc(EncoderDirection_t direction, int32_t steps,
   //   lastPos = enc.pos;
   // }
 }
+// 简单的正弦波近似函数 (避免使用浮点数学库)
+int16_t fastSin(int16_t angle) {
+  // 使用查找表方式实现简单正弦波
+  static const int8_t sinTable[16] = {0,   24,  49,  71,  90, 106, 117, 125,
+                                      127, 125, 117, 106, 90, 71,  49,  24};
+  return sinTable[angle & 15] / 32; // 缩放到合适范围
+}
+
+// 弹球动画参数结构体 (使用定点数运算避免浮点)
+typedef struct {
+  int16_t x, y;   // 弹球位置 (实际位置 * 256)
+  int16_t vx, vy; // 弹球速度 (速度 * 256)
+  uint8_t radius; // 弹球半径
+  struct {
+    uint8_t x, y;       // 拖尾位置历史
+  } trail[6];           // 拖尾效果，保存6个历史位置
+  uint8_t trailIdx;     // 拖尾索引
+  uint8_t bounceEffect; // 反弹特效计数器
+} BounceBall;
+
+// 静态弹球实例 (使用定点数，实际值*256)
+static BounceBall ball = {.x = 64 * 256, // 64.0f -> 64*256
+                          .y = 32 * 256, // 32.0f -> 32*256
+                          .vx = 307,     // 1.2f -> 1.2*256 ≈ 307
+                          .vy = 205,     // 0.8f -> 0.8*256 ≈ 205
+                          .radius = 3,
+                          .trail = {{0}},
+                          .trailIdx = 0,
+                          .bounceEffect = 0};
+
+// 更新弹球物理 (使用整数运算)
+void updateBallPhysics() {
+  // 更新位置 (定点数运算)
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+
+  // 转换为像素坐标进行边界检测
+  int16_t pixelX = ball.x / 256;
+  int16_t pixelY = ball.y / 256;
+
+  // 屏幕边界检测和反弹
+  bool bounced = false;
+
+  if (pixelX <= ball.radius || pixelX >= 128 - ball.radius) {
+    ball.vx = -ball.vx;
+    bounced = true;
+    // 限制位置在边界内
+    if (pixelX <= ball.radius) {
+      ball.x = ball.radius * 256;
+    } else {
+      ball.x = (128 - ball.radius) * 256;
+    }
+  }
+
+  if (pixelY <= ball.radius + 10 ||
+      pixelY >= 64 - ball.radius) { // 顶部留空给状态栏
+    ball.vy = -ball.vy;
+    bounced = true;
+    // 限制位置在边界内
+    if (pixelY <= ball.radius + 10) {
+      ball.y = (ball.radius + 11) * 256; // +11 而不是 +10，避免边界重叠
+    } else {
+      ball.y = (64 - ball.radius) * 256;
+    }
+  }
+
+  // 只在实际发生反弹时触发特效
+  if (bounced && ball.bounceEffect == 0) {
+    ball.bounceEffect = 8;
+  }
+
+  // 减少反弹特效计数器
+  if (ball.bounceEffect > 0) {
+    ball.bounceEffect--;
+  }
+
+  // 每隔几帧更新拖尾 - 让轨迹更加自然
+  static uint8_t updateCounter = 0;
+  updateCounter++;
+  if (updateCounter >= 2) { // 每2帧更新一次拖尾
+    updateCounter = 0;
+    ball.trail[ball.trailIdx].x = (uint8_t)(ball.x / 256);
+    ball.trail[ball.trailIdx].y = (uint8_t)(ball.y / 256);
+    ball.trailIdx = (ball.trailIdx + 1) % 6;
+  }
+}
+
+// 绘制弹球和拖尾
+void drawBounceBall() {
+  // 当前位置
+  int16_t currentX = ball.x / 256;
+  int16_t currentY = ball.y / 256;
+
+  // 绘制拖尾效果 - 根据历史位置绘制轨迹
+  int16_t lastX = currentX, lastY = currentY;
+
+  for (int i = 1; i < 6; i++) {
+    int trailIndex = (ball.trailIdx - i + 6) % 6;
+    uint8_t trailX = ball.trail[trailIndex].x;
+    uint8_t trailY = ball.trail[trailIndex].y;
+
+    if (trailX > 0 && trailY > 0) {
+      // 绘制连接线显示轨迹
+      if (i == 1) {
+        u8g2.drawLine(lastX, lastY, trailX, trailY);
+      }
+
+      // 根据距离当前位置的远近调整拖尾大小
+      if (i == 1) {
+        u8g2.drawDisc(trailX, trailY, 2); // 最近的拖尾点较大
+      } else if (i == 2) {
+        u8g2.drawDisc(trailX, trailY, 1); // 中等大小
+      } else {
+        u8g2.drawPixel(trailX, trailY); // 远处的拖尾点只是像素
+      }
+
+      lastX = trailX;
+      lastY = trailY;
+    }
+  }
+
+  // 绘制主弹球 - 使用实心圆
+  uint8_t drawRadius = ball.radius;
+  if (ball.bounceEffect > 0) {
+    // 反弹时弹球变大
+    drawRadius = ball.radius + (ball.bounceEffect / 2);
+    // 绘制反弹波纹
+    u8g2.drawCircle(currentX, currentY, ball.radius + ball.bounceEffect);
+  }
+  u8g2.drawDisc(currentX, currentY, drawRadius);
+
+  // 绘制弹球内部高光点
+  u8g2.setDrawColor(0);
+  u8g2.drawPixel(currentX - 1, currentY - 1);
+  u8g2.setDrawColor(1);
+}
+
+// 绘制装饰性星星
+void drawStars(uint8_t animFrame) {
+  // 固定位置的小星星，避开弹球活动区域
+  uint8_t starPositions[][2] = {{10, 20},  {118, 25}, {20, 55},
+                                {108, 58}, {35, 45},  {90, 40}};
+
+  for (int i = 0; i < 7; i++) {
+    // 每个星星有不同的闪烁周期和速度
+    uint8_t phase = (animFrame + i * 3) % 24;
+    if (phase < 16) { // 星星显示周期更长
+      int x = starPositions[i][0];
+      int y = starPositions[i][1];
+
+      // 根据相位绘制不同大小的星星
+      if (phase < 4) {
+        // 最亮阶段 - 绘制大星星
+        u8g2.drawPixel(x, y);
+        u8g2.drawPixel(x - 1, y);
+        u8g2.drawPixel(x + 1, y);
+        u8g2.drawPixel(x, y - 1);
+        u8g2.drawPixel(x, y + 1);
+        u8g2.drawPixel(x - 1, y - 1);
+        u8g2.drawPixel(x + 1, y - 1);
+        u8g2.drawPixel(x - 1, y + 1);
+        u8g2.drawPixel(x + 1, y + 1);
+        // 外围光晕
+        u8g2.drawPixel(x - 2, y);
+        u8g2.drawPixel(x + 2, y);
+        u8g2.drawPixel(x, y - 2);
+        u8g2.drawPixel(x, y + 2);
+      } else if (phase < 8) {
+        // 中等亮度 - 绘制中星星
+        u8g2.drawPixel(x, y);
+        u8g2.drawPixel(x - 1, y);
+        u8g2.drawPixel(x + 1, y);
+        u8g2.drawPixel(x, y - 1);
+        u8g2.drawPixel(x, y + 1);
+        u8g2.drawPixel(x - 1, y - 1);
+        u8g2.drawPixel(x + 1, y - 1);
+        u8g2.drawPixel(x - 1, y + 1);
+        u8g2.drawPixel(x + 1, y + 1);
+      } else if (phase < 12) {
+        // 较暗阶段 - 绘制小星星
+        u8g2.drawPixel(x, y);
+        u8g2.drawPixel(x - 1, y);
+        u8g2.drawPixel(x + 1, y);
+        u8g2.drawPixel(x, y - 1);
+        u8g2.drawPixel(x, y + 1);
+      } else {
+        // 最暗阶段 - 只有中心点
+        u8g2.drawPixel(x, y);
+      }
+    }
+  }
+}
+
+// 绘制波浪形边框
+void drawWaveBorder() {
+  uint32_t time = HAL_GetTick();
+
+  // 顶部波浪边框
+  for (int x = 0; x < 128; x += 4) {
+    int wave = fastSin((x + time / 200) / 4) + 9;
+    u8g2.drawPixel(x, wave);
+    u8g2.drawPixel(x + 1, wave);
+  }
+
+  // 底部波浪边框
+  for (int x = 0; x < 128; x += 4) {
+    int wave = fastSin((x + time / 150) / 3) + 62;
+    u8g2.drawPixel(x, wave);
+    u8g2.drawPixel(x + 1, wave);
+  }
+}
+
 // 绘制装饰线条和边框
-void drawDecorations() {
+void drawDecorations(uint8_t animFrame) {
+  // 如果在睡眠模式，绘制特殊动画效果
+  if (state.isSleeping) {
+    // drawBounceBall();
+    drawWaveBorder();
+    drawStars(animFrame);
+    return;
+  }
+
   // === 绘制亮度进度条 ===
-  // 亮度进度条参数
   const int brightnessBarX = 10;
   const int brightnessBarY = 32;
-  const int brightnessBarWidth = 126 - 8 * 2; // 为W标识预留空间
+  const int brightnessBarWidth = 126 - 8 * 2;
   const int brightnessBarHeight = 8;
 
   // 绘制"S"标识
@@ -338,27 +558,33 @@ void drawDecorations() {
 
   // 计算亮度填充宽度
   int brightness = constrain(state.brightness, 0, LED_MAX_BRIGHTNESS);
-  int fillWidth = (brightness * (brightnessBarWidth - 2)) /
-                  LED_MAX_BRIGHTNESS; // 减2是内边距
+  int fillWidth = (brightness * (brightnessBarWidth - 2)) / LED_MAX_BRIGHTNESS;
 
-  // 绘制填充部分
+  // 绘制填充部分 - 添加渐变效果
   if (fillWidth > 0) {
     u8g2.drawBox(brightnessBarX + 1, brightnessBarY + 1, fillWidth,
                  brightnessBarHeight - 2);
+
+    // 添加动态指示器
+    if (state.item == 2 && state.edit == 0) {
+      int indicatorX = brightnessBarX + fillWidth - 1;
+      if ((animFrame / 4) % 2) { // 闪烁效果
+        u8g2.setDrawColor(0);
+        u8g2.drawVLine(indicatorX, brightnessBarY + 1, brightnessBarHeight - 2);
+        u8g2.setDrawColor(1);
+      }
+    }
   }
 
-  // 绘制"L"标识
   u8g2.drawStr(brightnessBarX + brightnessBarWidth + 2, brightnessBarY + 8,
                "L");
 
   // === 绘制色温进度条 ===
-  // 色温进度条参数
   const int tempBarX = 10;
   const int tempBarY = 48;
-  const int tempBarWidth = 126 - 8 * 2; // 为W和C标识预留空间
+  const int tempBarWidth = 126 - 8 * 2;
   const int tempBarHeight = 8;
 
-  // 绘制"W"标识
   u8g2.setFont(u8g2_font_6x10_tf);
   u8g2.drawStr(tempBarX - 8, tempBarY + 8, "W");
 
@@ -368,20 +594,35 @@ void drawDecorations() {
   // 计算色温进度
   int tempRange = COLOR_TEMP_MAX - COLOR_TEMP_MIN;
   int currentOffset = constrain(state.colorTemp - COLOR_TEMP_MIN, 0, tempRange);
-  int starPos = (currentOffset * (tempBarWidth - 4)) / tempRange; // 星号位置
+  int starPos = (currentOffset * (tempBarWidth - 4)) / tempRange;
 
-  // 绘制进度条线条
-  for (int i = 2; i < tempBarWidth - 2; i += 3) {
+  // 绘制进度条刻度线
+  for (int i = 5; i < tempBarWidth - 5; i += 8) {
     u8g2.drawPixel(tempBarX + i, tempBarY + tempBarHeight / 2);
   }
 
-  // 绘制当前位置星号（用小方块代替）
+  // 绘制当前位置指示器 - 增强视觉效果
   if (starPos >= 0) {
-    u8g2.drawBox(tempBarX + starPos + 1, tempBarY + 2, 3, tempBarHeight - 4);
+    if (state.item == 1 && state.edit == 0 && (animFrame / 4) % 2) {
+      // 选中时闪烁的大指示器
+      u8g2.drawBox(tempBarX + starPos, tempBarY + 1, 4, tempBarHeight - 2);
+    } else {
+      // 正常指示器
+      u8g2.drawBox(tempBarX + starPos + 1, tempBarY + 2, 3, tempBarHeight - 4);
+    }
   }
 
-  // 绘制"C"标识
   u8g2.drawStr(tempBarX + tempBarWidth + 2, tempBarY + 8, "C");
+
+  // 添加装饰性边角
+  u8g2.drawPixel(0, 10);
+  u8g2.drawPixel(1, 11);
+  u8g2.drawPixel(127, 10);
+  u8g2.drawPixel(126, 11);
+  u8g2.drawPixel(0, 63);
+  u8g2.drawPixel(1, 62);
+  u8g2.drawPixel(127, 63);
+  u8g2.drawPixel(126, 62);
 }
 
 // 更新显示屏
@@ -404,6 +645,44 @@ void updateDisp() {
 
   // 清除缓冲区
   u8g2.clearBuffer();
+
+  if (state.isSleeping) {
+    u8g2.setContrast(1);
+
+    if (state.deepSleep) {
+      // 最上方绘制项目名称和作者
+      u8g2.setFont(u8g2_font_3x5im_tr);
+      u8g2.drawStr(0, 6, TITLE_TEXT);
+      u8g2.drawStr(90, 6, AUTHOR_TEXT);
+
+      // 如果息屏，显示弹球动画和装饰效果
+      u8g2.setFont(u8g2_font_10x20_tr);
+      u8g2.drawStr(22, 32, "SLEEPING");
+
+      // 小一点的字显示提示
+      u8g2.setFont(u8g2_font_6x10_tf);
+      u8g2.drawStr(24, 50, "Press any key");
+      u8g2.drawStr(32, 60, "to wake up");
+
+      // 绘制弹球动画和装饰
+      if (animUpdate) {
+        updateBallPhysics();
+      }
+
+      // 先绘制背景装饰
+      drawStars(animFrame);
+      drawWaveBorder();
+
+      // 再绘制弹球，这样弹球会在星星上方
+      drawBounceBall();
+
+      u8g2.sendBuffer();
+      return;
+    }
+
+  } else {
+    u8g2.setContrast(255); // 恢复正常对比度
+  }
 
   // === 顶部温度信息（动画更新） ===
   if (animUpdate || stateChanged) {
@@ -494,7 +773,7 @@ void updateDisp() {
   }
 
   // 绘制装饰元素（进度条等）
-  drawDecorations();
+  drawDecorations(animFrame);
 
   // === 底部状态行动画 ===
   u8g2.setFont(u8g2_font_5x8_tf);
@@ -518,6 +797,7 @@ void updateDisp() {
   // 发送缓冲区到显示屏
   u8g2.sendBuffer();
 }
+
 // 线性插值函数
 int16_t lerp(int16_t current, int16_t target, int16_t step) {
   if (current == target) {
@@ -587,8 +867,9 @@ void loop() {
 
   if (btn_changed) {
     lastChanged = now;
-    u8g2.setContrast(255);
     btn_changed = 0;
+    state.isSleeping = false;
+    state.deepSleep = false;
   }
 
   static uint32_t lastDisplayUpdate = 0;
@@ -604,9 +885,14 @@ void loop() {
 
   // 息屏处理
   if (now - lastChanged > SLEEP_TIME_MS) {
-    // if(state.master){
-    u8g2.setContrast(1);
-    // } else {
-    // }
+    state.isSleeping = true;
+  }
+
+  // 关机状态下一分钟进入深度休眠，显示动画
+  if (now - lastChanged > DEEP_SLEEP_TIME_MS) {
+    if (state.master) {
+      return;
+    }
+    state.deepSleep = true;
   }
 }
