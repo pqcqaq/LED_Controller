@@ -84,9 +84,9 @@ void Scan_I2C_Devices(void) {
   u8g2.drawStr(0, 10, "Scanning I2C...");
 
   // 绘制3个圆形代表3个设备，开始时为空心
-  u8g2.drawCircle(20, 30, 5, U8G2_DRAW_ALL);
-  u8g2.drawCircle(60, 30, 5, U8G2_DRAW_ALL);
-  u8g2.drawCircle(100, 30, 5, U8G2_DRAW_ALL);
+  u8g2.drawCircle(24, 30, 5, U8G2_DRAW_ALL);
+  u8g2.drawCircle(64, 30, 5, U8G2_DRAW_ALL);
+  u8g2.drawCircle(104, 30, 5, U8G2_DRAW_ALL);
 
   u8g2.sendBuffer();
 
@@ -96,11 +96,11 @@ void Scan_I2C_Devices(void) {
   status = HAL_I2C_IsDeviceReady(&hi2c1, OLED_ADDR, 2, 50);
   oled_ok = (status == HAL_OK);
   if (oled_ok) {
-    u8g2.drawDisc(20, 30, 5, U8G2_DRAW_ALL);
+    u8g2.drawDisc(24, 30, 5, U8G2_DRAW_ALL);
     serial_printf("OLED 0x%02X: OK\r\n", OLED_ADDR);
     devices.oled = true;
   } else {
-    u8g2.drawXBMP(18, 28, 5, 5, u8g2_font_icon_5_t_bits); // 使用自定义叉号图标
+    u8g2.drawXBMP(22, 28, 5, 5, u8g2_font_icon_5_t_bits); // 使用自定义叉号图标
     serial_printf("OLED 0x%02X: NO\r\n", OLED_ADDR);
   }
   u8g2.sendBuffer();
@@ -113,11 +113,11 @@ void Scan_I2C_Devices(void) {
   status = HAL_I2C_IsDeviceReady(&hi2c1, ADC_ADDR, 2, 50);
   adc_ok = (status == HAL_OK);
   if (adc_ok) {
-    u8g2.drawDisc(60, 30, 5, U8G2_DRAW_ALL);
+    u8g2.drawDisc(64, 30, 5, U8G2_DRAW_ALL);
     serial_printf("ADC 0x%02X: OK\r\n", ADC_ADDR);
     devices.extern_adc = true;
   } else {
-    u8g2.drawXBMP(58, 28, 5, 5, u8g2_font_icon_5_t_bits);
+    u8g2.drawXBMP(62, 28, 5, 5, u8g2_font_icon_5_t_bits);
     serial_printf("ADC 0x%02X: NO\r\n", ADC_ADDR);
   }
   u8g2.sendBuffer();
@@ -130,19 +130,22 @@ void Scan_I2C_Devices(void) {
   status = HAL_I2C_IsDeviceReady(&hi2c2, EEPROM_ADDR, 2, 50);
   eeprom_ok = (status == HAL_OK);
   if (eeprom_ok) {
-    u8g2.drawDisc(100, 30, 5, U8G2_DRAW_ALL);
+    u8g2.drawDisc(104, 30, 5, U8G2_DRAW_ALL);
     serial_printf("EEPROM 0x%02X: OK\r\n", EEPROM_ADDR);
     devices.eeprom = true;
   } else {
-    u8g2.drawXBMP(98, 28, 5, 5, u8g2_font_icon_5_t_bits);
+    u8g2.drawXBMP(102, 28, 5, 5, u8g2_font_icon_5_t_bits);
     serial_printf("EEPROM 0x%02X: NO\r\n", EEPROM_ADDR);
 
     // 显示一个settings will not be saved的提示
     u8g2.drawStr(0, 58, "Settings will");
     u8g2.drawStr(0, 64, "not be saved!");
+    HAL_Delay(400);
   }
   u8g2.sendBuffer();
-  HAL_Delay(800);
+  u8g2.drawStr(0, 18, "DONE!");
+  u8g2.sendBuffer();
+  HAL_Delay(600);
   IWDG_Refresh();
 }
 
@@ -324,7 +327,6 @@ void App_Loop(void) {
 
   // // 渲染显示内容
   // draw_button_encoder_test();
-
 }
 
 /**
