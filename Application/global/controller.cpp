@@ -112,7 +112,6 @@ void handleLongPress() {
   // state.item = 0;
   // state.edit = -1;
   // enc.pos = 0;
-  state.master = !state.master;
   if (state.master) {
     turnOn();
   } else {
