@@ -26,6 +26,7 @@
 #include "tim.h"
 #include "usart.h"
 #include "usb_device.h"
+#include "dma.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -95,6 +96,7 @@ int main(void) {
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_ADC1_Init();
   MX_I2C1_Init();
   MX_I2C2_Init();
@@ -106,6 +108,10 @@ int main(void) {
   HAL_TIM_Base_Start_IT(&htim3); // 启动定时器3中断
   MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
+
+  // Initialize UART DMA reception
+  UART_DMA_Init();
+  UART_Start_DMA_Reception();
 
   // Initialize user application
   App_Init();
@@ -121,6 +127,9 @@ int main(void) {
 
     // Call user application loop
     HAL_IWDG_Refresh(&hiwdg); // 喂狗
+
+    // Process UART messages
+    UART_Process_DMA_Reception();
 
     App_Loop();
   }

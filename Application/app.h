@@ -34,4 +34,11 @@ void App_Loop(void);
  */
 void App_TIM3_IRQHandler(void);
 
+/**
+ * @brief Process UART command
+ * @param command Received command string
+ * @param length Command length
+ */
+void App_Process_UART_Command(const char* command, uint16_t length);
+
 #endif /* __APP_H__ */

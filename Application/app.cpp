@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <i2c.h>
 #include <stdio.h>
+#include <string.h>
 
 /* Forward declarations ------------------------------------------------------*/
 extern void calculateChannelRatio(uint16_t colorTemp, uint16_t brightness,
@@ -246,6 +247,15 @@ void App_Init(void) {
  */
 void App_Loop(void) {
 
+  // 检查并处理串口消息
+  if (UART_Has_Message()) {
+    UartMessage_t* message = UART_Get_Message();
+    if (message != NULL) {
+      App_Process_UART_Command((const char*)message->data, message->length);
+      UART_Clear_Message(); // 清除消息，准备接收下一个
+    }
+  }
+
   GlobalObjects_Process();
 
   loop();
@@ -445,4 +455,40 @@ static void encoder_rotation_handler(EncoderDirection_t direction,
 void App_TIM3_IRQHandler(void) {
   // 每次中断发生时，计数器加1
   updatePWM();
+}
+
+/**
+ * @brief 处理串口命令
+ * @param command 接收到的命令字符串
+ * @param length 命令长度
+ */
+void App_Process_UART_Command(const char* command, uint16_t length) {
+  // 检查命令是否有效
+  if (command == NULL || length == 0) {
+    UART_Send_String("ERROR: Invalid command\r\n");
+    return;
+  }
+
+  // 发送确认消息（调试用）
+  UART_Send_String("Received: ");
+  UART_Send_String(command);
+  UART_Send_String("\r\n");
+
+  // TODO: 在这里添加你的具体命令处理逻辑
+  // 例如：
+  // if (strncmp(command, "LED_ON", 6) == 0) {
+  //     // 处理LED开启命令
+  //     UART_Send_String("LED ON\r\n");
+  // }
+  // else if (strncmp(command, "LED_OFF", 7) == 0) {
+  //     // 处理LED关闭命令
+  //     UART_Send_String("LED OFF\r\n");
+  // }
+  // else if (strncmp(command, "STATUS", 6) == 0) {
+  //     // 处理状态查询命令
+  //     UART_Send_String("System OK\r\n");
+  // }
+  // else {
+  //     UART_Send_String("ERROR: Unknown command\r\n");
+  // }
 }
