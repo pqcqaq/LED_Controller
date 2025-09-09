@@ -882,5 +882,6 @@ void loop() {
   if (current_time - last_save_time >= SAVE_INTERVAL_MS && settings_changed) {
     Settings_Save(&state);
     last_save_time = current_time;
+    settings_changed = 0;
   }
 }
