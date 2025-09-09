@@ -54,8 +54,8 @@ void Button::init() {
  */
 void Button::process() {
   if (interrupt_mode_enabled_) {
-    // In interrupt mode, only process multi-click timeout and long press
-    // detection
+    // In interrupt mode, only process multi-click timeout and long press detection
+    // State changes are handled in onGpioInterrupt()
     processMultiClick();
     checkLongPress();
   } else {
@@ -198,6 +198,10 @@ void Button::onGpioInterrupt() {
           uint32_t press_duration = current_time - press_start_time_;
           triggerEvent(BUTTON_EVENT_RELEASE);
 
+          // Reset long press state when button is released
+          long_press_triggered_ = false;
+          last_long_press_time_ = 0;
+
           // Handle click detection
           if (press_duration < long_press_time_ms_) {
             if (multi_click_enabled_) {
@@ -270,6 +274,10 @@ void Button::stateMachine() {
       uint32_t press_duration = current_time - press_start_time_;
 
       triggerEvent(BUTTON_EVENT_RELEASE);
+
+      // Reset long press state when button is released
+      long_press_triggered_ = false;
+      last_long_press_time_ = 0;
 
       // Handle click detection
       if (press_duration < long_press_time_ms_) {

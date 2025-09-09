@@ -31,7 +31,7 @@
 #define MAX_PWM 6100      // 最大PWM值
 #define PWM_FADE_STEP 256 // PWM 每次缓变最大值
 // #define PWM_FADE_INTERVAL_MS 32 // 每隔32ms更新一次PWM值
-#define CALC_PWM_INTERVAL_MS 50 // 每隔50ms计算一次目标PWM值
+#define CALC_PWM_INTERVAL_MS 1000 // 每隔50ms计算一次目标PWM值
 
 // 色温参数 (Color temperature parameters)
 #define COLOR_TEMP_MIN 3000         // 最低色温 (通道1)
@@ -61,10 +61,7 @@
 
 #define get_temperature_int(temp_x100) (temp_x100 / 100)
 #define get_temperature_frac(temp_x100)                                        \
-  ({                                                                           \
-    int32_t abs_temp = (temp_x100 < 0) ? -temp_x100 : temp_x100;               \
-    abs_temp % 100;                                                            \
-  })
+  ((temp_x100 < 0) ? -temp_x100 : temp_x100 % 100)
 
 #define set_pwm1(value) __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, value)
 #define set_pwm2(value) __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, value)
@@ -77,6 +74,10 @@
 #define constrain(amt, low, high)                                              \
   ((amt) < (low) ? (low) : ((amt) > (high) ? (high) : (amt)))
 #endif
+
+static const char *activeStates[] = {
+    "    ACTIVE    ", "   .ACTIVE.   ", "  ..ACTIVE..  ", " ...ACTIVE... ",
+    "... ACTIVE ...", "..  ACTIVE  ..", ".   ACTIVE   .", "    ACTIVE    "};
 
 // 处理按钮单击事件
 void handleClick();

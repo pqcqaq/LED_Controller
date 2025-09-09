@@ -10,11 +10,10 @@
 #include <cstdint>
 #include <cstdlib>
 #include <stdio.h>
-#include <sys/_types.h>
 
 // EEPROM集成函数声明
 extern "C" {
-  void Settings_MarkDirty(void);
+void Settings_MarkDirty(void);
 }
 
 unsigned char btn_changed = 0;
@@ -47,7 +46,7 @@ void calculateChannelRatio(uint16_t colorTemp, uint16_t brightness,
 
   // 计算各通道的基础权重 (0-LED_TEMP_WEIGHT_TOTAL)
   int32_t warm_weight = LED_TEMP_WEIGHT_TOTAL - cct_ratio; // ch1 (暖白) 权重
-  int32_t cold_weight = cct_ratio;                         // ch2 (冷白) 权重
+  int32_t cold_weight = cct_ratio;
 
   uint16_t ch1_brightness, ch2_brightness;
 
@@ -103,11 +102,11 @@ void handleDoubleClick() {
   // state.edit = -1; // 退出编辑模式
   bool old_fanAuto = state.fanAuto;
   state.fanAuto = !state.fanAuto;
-  
+
   if (state.fanAuto != old_fanAuto) {
     Settings_MarkDirty(); // 标记设置需要保存
   }
-  
+
   serial_printf("Fan Auto Mode: %s\r\n", state.fanAuto ? "ON" : "OFF");
 }
 
@@ -536,14 +535,7 @@ void drawWaveBorder() {
 }
 
 // 绘制装饰线条和边框
-void drawDecorations(uint8_t animFrame) {
-  // 如果在睡眠模式，绘制特殊动画效果
-  if (state.isSleeping) {
-    // drawBounceBall();
-    drawWaveBorder();
-    drawStars(animFrame);
-    return;
-  }
+void drawDecorations() {
 
   // === 绘制亮度进度条 ===
   const int brightnessBarX = 10;
@@ -570,12 +562,12 @@ void drawDecorations(uint8_t animFrame) {
 
     // 添加动态指示器
     if (state.item == 2 && state.edit == 0) {
-      int indicatorX = brightnessBarX + fillWidth - 1;
-      if ((animFrame / 4) % 2) { // 闪烁效果
-        u8g2.setDrawColor(0);
-        u8g2.drawVLine(indicatorX, brightnessBarY + 1, brightnessBarHeight - 2);
-        u8g2.setDrawColor(1);
-      }
+      // int indicatorX = brightnessBarX + fillWidth - 1;
+      // if ((animFrame / 4) % 2) { // 闪烁效果
+      //   u8g2.setDrawColor(0);
+      //   u8g2.drawVLine(indicatorX, brightnessBarY + 1, brightnessBarHeight -
+      //   2); u8g2.setDrawColor(1);
+      // }
     }
   }
 
@@ -606,13 +598,13 @@ void drawDecorations(uint8_t animFrame) {
 
   // 绘制当前位置指示器 - 增强视觉效果
   if (starPos >= 0) {
-    if (state.item == 1 && state.edit == 0 && (animFrame / 4) % 2) {
-      // 选中时闪烁的大指示器
-      u8g2.drawBox(tempBarX + starPos, tempBarY + 1, 4, tempBarHeight - 2);
-    } else {
-      // 正常指示器
-      u8g2.drawBox(tempBarX + starPos + 1, tempBarY + 2, 3, tempBarHeight - 4);
-    }
+    // if (state.item == 1 && state.edit == 0 && (animFrame / 4) % 2) {
+    // 选中时闪烁的大指示器
+    // u8g2.drawBox(tempBarX + starPos, tempBarY + 1, 4, tempBarHeight - 2);
+    // } else {
+    // 正常指示器
+    u8g2.drawBox(tempBarX + starPos + 1, tempBarY + 2, 3, tempBarHeight - 4);
+    // }
   }
 
   u8g2.drawStr(tempBarX + tempBarWidth + 2, tempBarY + 8, "C");
@@ -649,8 +641,18 @@ void updateDisp() {
   // 清除缓冲区
   u8g2.clearBuffer();
 
+  // 如果在睡眠模式，绘制特殊动画效果
   if (state.isSleeping) {
+
+    if (animUpdate) {
+      animFrame = (animFrame + 1) % 8;
+      lastAnim = now;
+    }
+
     u8g2.setContrast(1);
+
+    drawWaveBorder();
+    drawStars(animFrame);
 
     if (state.deepSleep) {
       // 最上方绘制项目名称和作者
@@ -701,16 +703,11 @@ void updateDisp() {
     } else {
       sprintf(tempStr, "LED:%d.%02dC", temp_int, temp_frac);
     }
-    u8g2.drawStr(0, 8, tempStr);
+    u8g2.drawStr(0, 7, tempStr);
 
     // 风扇状态
     const char *fan_status = state.fanAuto ? " AUTO" : "FORCE";
-    u8g2.drawStr(96, 8, fan_status);
-
-    if (animUpdate) {
-      animFrame = (animFrame + 1) % 8;
-      lastAnim = now;
-    }
+    u8g2.drawStr(96, 7, fan_status);
   }
 
   // === 主电源状态显示 ===
@@ -776,7 +773,7 @@ void updateDisp() {
   }
 
   // 绘制装饰元素（进度条等）
-  drawDecorations(animFrame);
+  drawDecorations();
 
   // === 底部状态行动画 ===
   u8g2.setFont(u8g2_font_5x8_tf);
@@ -786,15 +783,16 @@ void updateDisp() {
     u8g2.drawStr(38, 64, "[  READY  ]");
   } else {
     // 运行中动画
-    const char *activeStates[] = {"    ACTIVE    ", "   .ACTIVE.   ",
-                                  "  ..ACTIVE..  ", " ...ACTIVE... ",
-                                  " .. ACTIVE .. ", " .  ACTIVE  . "};
-    u8g2.drawStr(32, 64, activeStates[animFrame % 6]);
+    u8g2.drawStr(32, 64, activeStates[animFrame]);
   }
 
   // 更新lastState
   if (stateChanged) {
-    lastState = state;
+    lastState.master = state.master;
+    lastState.colorTemp = state.colorTemp;
+    lastState.brightness = state.brightness;
+    lastState.item = state.item;
+    lastState.edit = state.edit;
   }
 
   // 发送缓冲区到显示屏
@@ -821,27 +819,22 @@ int16_t lerp(int16_t current, int16_t target, int16_t step) {
 }
 
 void calcPWM() {
-  static uint16_t lastCalcTime = 0;
-  uint32_t now = HAL_GetTick();
-  if (now - lastCalcTime > CALC_PWM_INTERVAL_MS) {
-    // 只有在参数变化时才重新计算
-    if (state.master) {
-      if ((state.colorTemp != lastState.colorTemp ||
-           state.brightness != lastState.brightness)) {
-        serial_printf("Calculating PWM: ColorTemp=%dK, Brightness=%d%%\r\n",
-                      state.colorTemp, state.brightness);
-        calculateChannelRatio(state.colorTemp, state.brightness,
-                              &state.targetCh1PWM, &state.targetCh2PWM);
-        lastState.colorTemp = state.colorTemp;
-        lastState.brightness = state.brightness;
-        lastState.targetCh1PWM = state.targetCh1PWM;
-        lastState.targetCh2PWM = state.targetCh2PWM;
-      }
-    } else {
-      state.targetCh1PWM = 0;
-      state.targetCh2PWM = 0;
+  // 只有在参数变化时才重新计算
+  if (state.master) {
+    if ((state.colorTemp != lastState.colorTemp ||
+         state.brightness != lastState.brightness)) {
+      lastState.colorTemp = state.colorTemp;
+      lastState.brightness = state.brightness;
+      serial_printf("Calculating PWM: ColorTemp=%dK, Brightness=%d%%\r\n",
+                    state.colorTemp, state.brightness);
+      calculateChannelRatio(state.colorTemp, state.brightness,
+                            &state.targetCh1PWM, &state.targetCh2PWM);
+      lastState.targetCh1PWM = state.targetCh1PWM;
+      lastState.targetCh2PWM = state.targetCh2PWM;
     }
-    lastCalcTime = now;
+  } else {
+    state.targetCh1PWM = 0;
+    state.targetCh2PWM = 0;
   }
 }
 

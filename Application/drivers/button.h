@@ -39,7 +39,7 @@ typedef enum {
 } ButtonEvent_t;
 
 /* Exported constants --------------------------------------------------------*/
-#define BUTTON_DEBOUNCE_TIME_MS 50                 // Button debounce time
+#define BUTTON_DEBOUNCE_TIME_MS 80                 // Button debounce time
 #define BUTTON_DEFAULT_LONG_PRESS_TIME_MS 800      // Default long press threshold
 #define BUTTON_DEFAULT_LONG_PRESS_INTERVAL_MS 200  // Default continuous long press interval
 #define BUTTON_DEFAULT_MULTI_CLICK_GAP_MS 250      // Default multi-click gap time
