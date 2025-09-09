@@ -23,15 +23,15 @@ typedef struct {
   bool fanAuto;        // 风扇自动控制
   bool isSleeping;     // 屏幕是否息屏
   bool deepSleep;      // 进入深度睡眠
-  uint16_t brightness; // 亮度值 (0-100%)
+  uint16_t brightness; // 亮度值 (0-MAX%)
   uint16_t colorTemp;  // 色温值 (3000-5700K)
 
   // === PWM输出值 ===
-  uint16_t currentCh1PWM; // 通道1的当前PWM值 (0-32767)
-  uint16_t currentCh2PWM; // 通道2的当前PWM值 (0-32767)
+  uint16_t currentCh1PWM; // 通道1的当前PWM值 (0-6100)
+  uint16_t currentCh2PWM; // 通道2的当前PWM值 (0-6100)
 
-  uint16_t targetCh1PWM; // 通道1的目标PWM值 (0-32767)
-  uint16_t targetCh2PWM; // 通道2的目标PWM值 (0-32767)
+  uint16_t targetCh1PWM; // 通道1的目标PWM值 (0-6100)
+  uint16_t targetCh2PWM; // 通道2的目标PWM值 (0-6100)
 
   // === 用户界面状态 ===
   uint8_t item; // 当前选中的项目 (0=主开关, 1=色温, 2=亮度)

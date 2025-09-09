@@ -8,7 +8,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "app.h"
 #include "animations/boot_animation.h"
-#include "drivers/eeprom_integration.h"
 #include "drivers/iwdg_a.h"
 #include "global/controller.h"
 #include "global/global_objects.h"
@@ -50,7 +49,27 @@ static const uint8_t u8g2_font_icon_5_t_bits[] = {
     0b10001, 0b01010, 0b00100, 0b01010, 0b10001,
 };
 
+// void I2CScan() {
+//   uint8_t i = 0;
+//   HAL_StatusTypeDef status;
+//   serial_printf("I2C Scan Start:\r\n");
+//   IWDG_Refresh();
+//   for (i = 0; i < 127; i++) {
+//     status = HAL_I2C_Master_Transmit(&hi2c2, i << 1, 0, 0, 200);
+//     if (status == HAL_OK) {
+//       serial_printf("i2c addr:0x%02X is ok\r\n", i << 1);
+//     } else if (status == HAL_TIMEOUT) {
+//       serial_printf("i2c addr:0x%02X is timeout\r\n", i << 1);
+//     } else if (status == HAL_BUSY) {
+//       serial_printf("i2c addr:0x%02X is busy\r\n", i << 1);
+//     }
+//     IWDG_Refresh();
+//   }
+//   serial_printf("I2C Scan End.\r\n");
+// }
+
 void Scan_I2C_Devices(void) {
+  // I2CScan();
   HAL_StatusTypeDef status;
   bool oled_ok, adc_ok, eeprom_ok;
   const uint8_t OLED_ADDR = 0x78;
@@ -306,8 +325,6 @@ void App_Loop(void) {
   // // 渲染显示内容
   // draw_button_encoder_test();
 
-  // 执行EEPROM自动保存任务
-  Settings_AutoSaveTask(&state);
 }
 
 /**
@@ -407,8 +424,7 @@ static void encoder_rotation_handler(EncoderDirection_t direction,
   // 调用控制器处理编码器事件
   handleEnc(direction, steps, speed);
 
-  // 标记设置为脏状态，需要保存
-  Settings_MarkDirty();
+  // 不在每次旋转时保存设置，而是在编辑结束时保存
 }
 
 // /**

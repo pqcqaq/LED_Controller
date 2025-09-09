@@ -56,6 +56,9 @@
 #define FAN_EN_PORT GPIOA     // 风扇启用端口
 #define FAN_EN_PIN GPIO_PIN_4 // 风扇启用引脚
 
+// 配置保存
+#define SAVE_INTERVAL_MS 1000 // 设置保存间隔，单位毫秒
+
 #define colorTempToMired(colorTemp)                                            \
   (1000000L * 10 / colorTemp) // 色温到mired值转换 (避免浮点运算)
 

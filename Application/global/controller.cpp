@@ -1,5 +1,6 @@
 #include "controller.h"
 #include "custom_types.h"
+#include "drivers/settings.h"
 #include "gamma_table.h"
 #include "global_objects.h"
 #include "stm32f1xx_hal.h"
@@ -11,12 +12,8 @@
 #include <cstdlib>
 #include <stdio.h>
 
-// EEPROM集成函数声明
-extern "C" {
-void Settings_MarkDirty(void);
-}
-
 unsigned char btn_changed = 0;
+unsigned char settings_changed = 0; // 设置已更改标志
 
 // 计算色温对应的两个通道比例
 // 修正后的色温通道比例计算函数
@@ -100,12 +97,8 @@ void handleDoubleClick() {
   // 双击切换主开关状态
   // state.master = !state.master;
   // state.edit = -1; // 退出编辑模式
-  bool old_fanAuto = state.fanAuto;
   state.fanAuto = !state.fanAuto;
-
-  if (state.fanAuto != old_fanAuto) {
-    Settings_MarkDirty(); // 标记设置需要保存
-  }
+  settings_changed = 1;
 
   serial_printf("Fan Auto Mode: %s\r\n", state.fanAuto ? "ON" : "OFF");
 }
@@ -284,34 +277,25 @@ void handleEnc(EncoderDirection_t direction, int32_t steps,
     // lastTime = millis();
 
     if (state.item == 1) { // 色温调节
-      uint16_t old_colorTemp = state.colorTemp;
       state.colorTemp =
           constrain((direction == ENCODER_DIR_CW
                          ? state.colorTemp + steps * LED_TEMP_STEP
                          : state.colorTemp - steps * LED_TEMP_STEP),
                     COLOR_TEMP_MIN, COLOR_TEMP_MAX);
 
-      if (state.colorTemp != old_colorTemp) {
-        Settings_MarkDirty(); // 标记设置需要保存
-      }
-
       serial_printf("Color Temp: %dK, last Step: %d\r\n", state.colorTemp,
                     (direction == ENCODER_DIR_CW ? steps : -steps));
 
     } else if (state.item == 2) { // 亮度调节
-      uint16_t old_brightness = state.brightness;
       state.brightness =
           constrain(direction == ENCODER_DIR_CW ? state.brightness + steps
                                                 : state.brightness - steps,
                     0, LED_MAX_BRIGHTNESS);
 
-      if (state.brightness != old_brightness) {
-        Settings_MarkDirty(); // 标记设置需要保存
-      }
-
       serial_printf("Brightness: %d%%, last Step: %d\r\n", state.brightness,
                     direction == ENCODER_DIR_CW ? steps : -steps);
     }
+    settings_changed = 1;
   }
   //     } else {
   //       // 导航模式：选择项目
@@ -890,5 +874,13 @@ void loop() {
       return;
     }
     state.deepSleep = true;
+  }
+
+  // 延迟保存设置 (避免频繁EEPROM写入)
+  static uint32_t last_save_time = 0;
+  uint32_t current_time = HAL_GetTick();
+  if (current_time - last_save_time >= SAVE_INTERVAL_MS && settings_changed) {
+    Settings_Save(&state);
+    last_save_time = current_time;
   }
 }
