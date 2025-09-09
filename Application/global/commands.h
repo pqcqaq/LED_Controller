@@ -18,7 +18,7 @@ extern "C" {
 #include <stdint.h>
 
 /* Defines -------------------------------------------------------------------*/
-#define CMD_MAX_COMMANDS 64       // 最大命令队列长度
+#define CMD_MAX_COMMANDS 128      // 最大命令队列长度
 #define CMD_MAX_COMMAND_LENGTH 32 // 单个命令最大长度
 #define CMD_MAX_PARAMS 8          // 命令最大参数数量
 #define CMD_MAX_PARAM_LENGTH 4    // 参数最大长度

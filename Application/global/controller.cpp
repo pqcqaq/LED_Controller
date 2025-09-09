@@ -646,7 +646,7 @@ void updateDisp() {
   if (state.isSleeping) {
 
     if (animUpdate) {
-      animFrame = (animFrame + 1) % 60; // 循环动画帧
+      animFrame = (animFrame + 1) % 64; // 循环动画帧
       lastAnim = now;
     }
 
@@ -784,7 +784,7 @@ void updateDisp() {
     u8g2.drawStr(38, 64, "[  READY  ]");
   } else {
     // 运行中动画
-    u8g2.drawStr(32, 64, activeStates[animFrame % 8]);
+    u8g2.drawStr(32, 64, activeStates[(animFrame / 8) % 8]);
   }
 
   // 更新lastState
