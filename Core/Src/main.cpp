@@ -20,13 +20,13 @@
 #include "main.h"
 #include "adc.h"
 #include "custom_types.h"
+#include "dma.h"
 #include "gpio.h"
 #include "i2c.h"
 #include "stm32f1xx_hal_iwdg.h"
 #include "tim.h"
 #include "usart.h"
 #include "usb_device.h"
-#include "dma.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -106,6 +106,8 @@ int main(void) {
   MX_TIM2_Init();
   MX_TIM3_Init();
   HAL_TIM_Base_Start_IT(&htim3); // 启动定时器3中断
+  MX_TIM4_Init();
+  HAL_TIM_Base_Start_IT(&htim4); // 启动定时器4中断
   MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
 
@@ -232,6 +234,10 @@ extern "C" void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
   if (htim == &htim3) {
     // 每次中断发生时，计数器加1
     App_TIM3_IRQHandler();
+  }
+  if (htim == &htim4) {
+    // 每次中断发生时，执行命令
+    App_Command_Executor_Timer_Callback();
   }
 }
 

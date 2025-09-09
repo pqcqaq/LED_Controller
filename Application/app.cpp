@@ -11,6 +11,7 @@
 #include "drivers/iwdg_a.h"
 #include "global/controller.h"
 #include "global/global_objects.h"
+#include "global/commands.h"
 #include "hardware/devices.h"
 #include "stm32_u8g2.h"
 #include "tim.h"
@@ -239,6 +240,9 @@ void App_Init(void) {
   // 初始化PWM占空比为0
   __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
   __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, 0);
+  
+  // 初始化命令系统
+  Commands_Init();
 }
 
 /**
@@ -470,25 +474,42 @@ void App_Process_UART_Command(const char* command, uint16_t length) {
   }
 
   // 发送确认消息（调试用）
-  UART_Send_String("Received: ");
-  UART_Send_String(command);
-  UART_Send_String("\r\n");
+  UART_Printf("Received: %s\r\n", command);
 
-  // TODO: 在这里添加你的具体命令处理逻辑
-  // 例如：
-  // if (strncmp(command, "LED_ON", 6) == 0) {
-  //     // 处理LED开启命令
-  //     UART_Send_String("LED ON\r\n");
-  // }
-  // else if (strncmp(command, "LED_OFF", 7) == 0) {
-  //     // 处理LED关闭命令
-  //     UART_Send_String("LED OFF\r\n");
-  // }
-  // else if (strncmp(command, "STATUS", 6) == 0) {
-  //     // 处理状态查询命令
-  //     UART_Send_String("System OK\r\n");
-  // }
-  // else {
-  //     UART_Send_String("ERROR: Unknown command\r\n");
-  // }
+  // 特殊调试命令：手动执行队列
+  if (strcmp(command, "EXEC") == 0) {
+    uint16_t queue_count = Commands_Get_Queue_Count();
+    UART_Printf("Executing %d commands in queue...\r\n", queue_count);
+    
+    for (int i = 0; i < queue_count + 5; i++) { // 多执行几次确保清空
+      CommandStatus_t status = Commands_Execute_Next();
+      if (status == CMD_STATUS_QUEUE_EMPTY) {
+        break;
+      }
+    }
+    UART_Printf("Command execution completed\r\n");
+    return;
+  }
+  
+  // 特殊调试命令：查看队列状态
+  if (strcmp(command, "QUEUE") == 0) {
+    UART_Printf("Queue status: %d commands pending\r\n", Commands_Get_Queue_Count());
+    return;
+  }
+
+  // 使用命令系统解析和入队命令
+  uint16_t parsed_count = Commands_Parse_And_Enqueue(command);
+  
+  if (parsed_count > 0) {
+    UART_Printf("OK: Enqueued %d commands\r\n", parsed_count);
+  } else {
+    UART_Send_String("ERROR: Failed to parse commands\r\n");
+  }
+}
+
+/**
+ * @brief Command executor timer callback (call from TIM4 interrupt)
+ */
+void App_Command_Executor_Timer_Callback(void) {
+  Commands_Executor_Loop();
 }

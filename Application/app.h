@@ -41,4 +41,9 @@ void App_TIM3_IRQHandler(void);
  */
 void App_Process_UART_Command(const char* command, uint16_t length);
 
+/**
+ * @brief Command executor timer callback (call from TIM4 interrupt)
+ */
+void App_Command_Executor_Timer_Callback(void);
+
 #endif /* __APP_H__ */

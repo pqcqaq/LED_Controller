@@ -82,6 +82,9 @@ static const char *activeStates[] = {
     "    ACTIVE    ", "   .ACTIVE.   ", "  ..ACTIVE..  ", " ...ACTIVE... ",
     "... ACTIVE ...", "..  ACTIVE  ..", ".   ACTIVE   .", "    ACTIVE    "};
 
+void turnOn();
+void turnOff();
+
 // 处理按钮单击事件
 void handleClick();
 

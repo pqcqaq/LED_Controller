@@ -113,13 +113,30 @@ void handleLongPress() {
   // state.edit = -1;
   // enc.pos = 0;
   state.master = !state.master;
-  serial_printf("Master Power: %s\r\n", state.master ? "ON" : "OFF");
-
   if (state.master) {
+    turnOn();
+  } else {
+    turnOff();
+  }
+}
+
+void turnOn() {
+  if (!state.master) {
+    state.master = true;
     // 开机的时候要重新设置目标PWM
     calculateChannelRatio(state.colorTemp, state.brightness,
                           &state.targetCh1PWM, &state.targetCh2PWM);
   }
+  serial_printf("Master Power: ON\r\n");
+}
+
+void turnOff() {
+  if (state.master) {
+    state.master = false;
+    state.targetCh1PWM = 0;
+    state.targetCh2PWM = 0;
+  }
+  serial_printf("Master Power: OFF\r\n");
 }
 
 /**
