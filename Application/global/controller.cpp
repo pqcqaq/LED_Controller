@@ -451,8 +451,8 @@ void drawStars(uint8_t animFrame) {
 
   for (int i = 0; i < 7; i++) {
     // 每个星星有不同的闪烁周期和速度
-    uint8_t phase = (animFrame + i * 3) % 24;
-    if (phase < 16) { // 星星显示周期更长
+    uint8_t phase = (animFrame + i * 5) % 48;
+    if (phase < 32) { // 星星显示周期更长
       int x = starPositions[i][0];
       int y = starPositions[i][1];
 
@@ -629,7 +629,7 @@ void updateDisp() {
   if (state.isSleeping) {
 
     if (animUpdate) {
-      animFrame = (animFrame + 1) % 8;
+      animFrame = (animFrame + 1) % 60; // 循环动画帧
       lastAnim = now;
     }
 
@@ -767,7 +767,7 @@ void updateDisp() {
     u8g2.drawStr(38, 64, "[  READY  ]");
   } else {
     // 运行中动画
-    u8g2.drawStr(32, 64, activeStates[animFrame]);
+    u8g2.drawStr(32, 64, activeStates[animFrame % 8]);
   }
 
   // 更新lastState
