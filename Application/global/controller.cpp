@@ -80,12 +80,19 @@ void handleClick() {
 
   // 只在色温(1)和亮度(2)之间切换
   if (state.item == 1) {
-    state.item = 2; // 从色温切换到亮度
+    state.item = 2;          // 从色温切换到亮度
+    state.animDirection = 0; // 从左到右
     serial_printf("Switched to Brightness\r\n");
   } else {
-    state.item = 1; // 从亮度或开关切换到色温
+    state.item = 1;          // 从亮度或开关切换到色温
+    state.animDirection = 1; // 从右到左
     serial_printf("Switched to Color Temperature\r\n");
   }
+
+  // 启动切换动画
+  state.animStarted = 1;
+  state.animProgress = 0;
+  state.animStartTime = HAL_GetTick();
 
   // 始终保持编辑状态
   state.edit = 0;
@@ -576,7 +583,7 @@ void drawDecorations() {
 
   // === 绘制色温进度条 ===
   const int tempBarX = 10;
-  const int tempBarY = 48;
+  const int tempBarY = 42;
   const int tempBarWidth = 126 - 8 * 2;
   const int tempBarHeight = 8;
 
@@ -620,6 +627,108 @@ void drawDecorations() {
   u8g2.drawPixel(126, 62);
 }
 
+// 绘制选项切换动画
+void drawItemSwitchAnimation() {
+  uint32_t now = HAL_GetTick();
+  uint32_t elapsed = now - state.animStartTime;
+
+  // 计算动画进度 (0-100)
+  if (elapsed >= ITEM_SWITCH_ANIM_MS) {
+    state.animStarted = 0;
+    state.animProgress = 100;
+  } else {
+    state.animProgress = (elapsed * 100) / ITEM_SWITCH_ANIM_MS;
+  }
+
+  // 使用PID控制器模拟真实的位置控制效果
+  uint8_t easedProgress = state.animProgress;
+  if (state.animProgress < 100) {
+    // 将时间归一化到0-1000范围以获得更好的精度
+    int32_t t = (state.animProgress * 1000) / 100; // 0-1000
+
+    // PID参数 (放大1000倍避免浮点数)
+    int32_t kp = 600; // 比例增益，控制响应速度 (增加以增强震荡)
+    int32_t ki = 400; // 积分增益，消除稳态误差 (略减少)
+    int32_t kd = 180; // 微分增益，减少震荡 (减少以增强震荡效果)
+
+    // 目标位置是1000 (对应100%)
+    int32_t target = 1000;
+
+    // 当前位置基于时间的简化模型
+    int32_t current_pos = 0;
+    int32_t error = target;
+    int32_t integral = 0;
+    int32_t last_error = target;
+
+    // 简化的PID仿真，每个时间步长执行一次PID计算
+    for (int32_t step = 0; step < t; step += 50) {
+      // 计算误差
+      error = target - current_pos;
+
+      // 积分项 (累积误差)
+      integral += error;
+
+      // 微分项 (误差变化率)
+      int32_t derivative = error - last_error;
+
+      // PID输出
+      int32_t output = (kp * error + ki * integral + kd * derivative) / 1000;
+
+      current_pos += output;
+      last_error = error;
+    }
+
+    // 转换回0-100+范围
+    easedProgress = current_pos / 10;
+  }
+
+  // 固定的文本位置 - 文本永远不移动
+  int16_t tempX = 2;
+  int16_t brightX = 84;
+
+  // 始终在固定位置显示文本
+  char tempStr[8];
+  sprintf(tempStr, "%4dK", state.colorTemp);
+  u8g2.drawStr(tempX, 24, tempStr);
+
+  char brightStr[8];
+  if (state.brightness == LED_MAX_BRIGHTNESS) {
+    sprintf(brightStr, "100%%");
+  } else {
+    int brightPercent =
+        (state.brightness * 1000 + LED_MAX_BRIGHTNESS / 2) / LED_MAX_BRIGHTNESS;
+    sprintf(brightStr, "%2d.%d%%", brightPercent / 10, brightPercent % 10);
+  }
+  u8g2.drawStr(brightX, 24, brightStr);
+
+  // 计算滑块的目标位置
+  int16_t targetX = (state.item == 1) ? tempX - 2 : brightX - 2;
+
+  // 如果动画进行中，计算当前滑块位置
+  int16_t currentX = targetX;
+  if (state.animStarted) {
+    int16_t startX = (state.animDirection == 0) ? tempX - 2 : brightX - 2;
+    int16_t endX = (state.animDirection == 0) ? brightX - 2 : tempX - 2;
+    currentX = startX + ((endX - startX) * easedProgress) / 100;
+  }
+
+  // 绘制选中背景滑块
+  u8g2.setDrawColor(1);
+  u8g2.drawRBox(currentX, 14, 44, 14, 2);
+
+  // 在滑块内绘制对应的文本（反色）
+  u8g2.setDrawColor(0);
+  if (state.item == 1) {
+    u8g2.drawStr(currentX + 2, 26, tempStr);
+  } else {
+    u8g2.drawStr(currentX + 2, 26, brightStr);
+  }
+  u8g2.setDrawColor(1);
+
+  // 添加简单的边框效果
+  u8g2.drawRFrame(currentX - 1, 13, 46, 16, 3);
+}
+
 // 更新显示屏
 void updateDisp() {
   static uint32_t lastAnim = 0;
@@ -634,7 +743,10 @@ void updateDisp() {
        state.brightness != lastState.brightness ||
        state.item != lastState.item || state.edit != lastState.edit);
 
-  if (!stateChanged && !animUpdate) {
+  // 动画进行中也需要更新显示
+  bool animInProgress = state.animStarted;
+
+  if (!stateChanged && !animUpdate && !animInProgress) {
     return;
   }
 
@@ -719,58 +831,35 @@ void updateDisp() {
     u8g2.drawStr(54, 24, "OFF");
   }
 
-  // === 色温和亮度数值显示 ===
+  // === 色温和亮度数值显示（含动画） ===
   u8g2.setFont(u8g2_font_8x13B_tr);
-
-  // 色温显示（左侧）
-  char tempStr[8];
-  sprintf(tempStr, "%4dK", state.colorTemp);
-
-  // 如果色温被选中，绘制反色背景
-  if (state.item == 1) {
-    u8g2.setDrawColor(1);
-    u8g2.drawBox(0, 14, 44, 14);
-    u8g2.setDrawColor(0);
-    u8g2.drawStr(2, 26, tempStr);
-    u8g2.setDrawColor(1);
-  } else {
-    u8g2.drawStr(2, 24, tempStr);
-  }
-
-  // 亮度显示（右侧）
-  char brightStr[8];
-  if (state.brightness == LED_MAX_BRIGHTNESS) {
-    sprintf(brightStr, "100%%");
-  } else {
-    int brightPercent = (state.brightness * 1000 + LED_MAX_BRIGHTNESS / 2) /
-                        LED_MAX_BRIGHTNESS; // +127实现四舍五入
-    sprintf(brightStr, "%2d.%d%%", brightPercent / 10, brightPercent % 10);
-  }
-
-  // 如果亮度被选中，绘制反色背景
-  if (state.item == 2) {
-    u8g2.setDrawColor(1);
-    u8g2.drawBox(82, 14, 44, 14);
-    u8g2.setDrawColor(0);
-    u8g2.drawStr(84, 26, brightStr);
-    u8g2.setDrawColor(1);
-  } else {
-    u8g2.drawStr(84, 24, brightStr);
-  }
+  drawItemSwitchAnimation();
 
   // === 标识符 ===
-  uint16_t labelY = 47;
+  // uint16_t labelY = 47;
   u8g2.setFont(u8g2_font_5x8_tf);
-  u8g2.drawStr(10, labelY, "TEMPR");
-  u8g2.drawStr(95, labelY, "LIGHT");
 
-  // 当前选择项目的额外指示
-  u8g2.setFont(u8g2_font_6x10_tf);
-  if (state.item == 1 && state.edit == 0) { // 色温选中
-    u8g2.drawStr(40, labelY, "<<*");
-  } else if (state.item == 2 && state.edit == 0) { // 亮度选中
-    u8g2.drawStr(70, labelY, "*>>");
-  }
+  // // 在动画过程中让标识符有一些动态效果
+  // if (state.animStarted) {
+  //   // 动画进行中时标识符略微淡化
+  //   if ((animFrame / 4) % 2) {
+  //     u8g2.drawStr(10, labelY, "TEMPR");
+  //     u8g2.drawStr(95, labelY, "LIGHT");
+  //   }
+  // } else {
+  //   u8g2.drawStr(10, labelY, "TEMPR");
+  //   u8g2.drawStr(95, labelY, "LIGHT");
+  // }
+
+  // // 当前选择项目的额外指示（动画时不显示）
+  // if (!state.animStarted) {
+  //   u8g2.setFont(u8g2_font_6x10_tf);
+  //   if (state.item == 1 && state.edit == 0) { // 色温选中
+  //     u8g2.drawStr(40, labelY, "<<*");
+  //   } else if (state.item == 2 && state.edit == 0) { // 亮度选中
+  //     u8g2.drawStr(70, labelY, "*>>");
+  //   }
+  // }
 
   // 绘制装饰元素（进度条等）
   drawDecorations();
@@ -787,7 +876,7 @@ void updateDisp() {
   }
 
   // 更新lastState
-  if (stateChanged) {
+  if (stateChanged || !state.animStarted) {
     lastState.master = state.master;
     lastState.colorTemp = state.colorTemp;
     lastState.brightness = state.brightness;

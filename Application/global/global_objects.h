@@ -37,6 +37,12 @@ typedef struct {
   uint8_t item; // 当前选中的项目 (0=主开关, 1=色温, 2=亮度)
   int8_t edit;  // 编辑模式 (-1=导航模式, 0=编辑值)
 
+  // === 动画状态 ===
+  uint8_t animStarted;    // 动画是否已开始
+  uint8_t animProgress;   // 动画进度 (0-100)
+  uint8_t animDirection;  // 动画方向 (0=左到右, 1=右到左)
+  uint32_t animStartTime; // 动画开始时间
+
   // === 传感器数据 ===
   int32_t temp; // ADC读取到的温度
 } SystemState;

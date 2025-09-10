@@ -8,6 +8,7 @@
 // 时间参数 (Time parameters)
 #define DISPLAY_UPDATE_MS 15     // 显示屏更新间隔，单位毫秒
 #define ANIMATION_FRAME_MS 30    // 动画帧间隔，单位毫秒
+#define ITEM_SWITCH_ANIM_MS 300  // 选项切换动画持续时间，单位毫秒
 #define SLEEP_TIME_MS 15000      // 屏幕息屏时间
 #define DEEP_SLEEP_TIME_MS 60000 // 进入深度睡眠时间
 
@@ -97,6 +98,9 @@ void handleLongPress();
 // 波轮事件
 void handleEnc(EncoderDirection_t direction, int32_t steps,
                EncoderSpeed_t speed);
+
+// 绘制选项切换动画
+void drawItemSwitchAnimation();
 
 void loop();
 
