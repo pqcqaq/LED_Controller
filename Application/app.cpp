@@ -9,9 +9,9 @@
 #include "app.h"
 #include "animations/boot_animation.h"
 #include "drivers/iwdg_a.h"
+#include "global/commands.h"
 #include "global/controller.h"
 #include "global/global_objects.h"
-#include "global/commands.h"
 #include "hardware/devices.h"
 #include "stm32_u8g2.h"
 #include "tim.h"
@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <string.h>
 
+
 /* Forward declarations ------------------------------------------------------*/
 extern void calculateChannelRatio(uint16_t colorTemp, uint16_t brightness,
                                   uint16_t *ch1PWM, uint16_t *ch2PWM);
@@ -33,7 +34,7 @@ static uint32_t loop_counter = 0;
 static uint32_t last_tick = 0;
 
 /* Private function prototypes -----------------------------------------------*/
-static void button_event_handler(ButtonEvent_t event, ButtonState_t state);
+// static void button_event_handler(ButtonEvent_t event, ButtonState_t state);
 static void button_click_handler();
 static void button_long_press_handler(uint32_t duration_ms);
 static void button_multi_click_handler(uint8_t click_count);
@@ -209,7 +210,7 @@ void App_Init(void) {
   Init_Devices();
 
   // 配置按键回调（面向对象）
-  encoder_button.setEventCallback(button_event_handler);
+  // encoder_button.setEventCallback(button_event_handler);
   encoder_button.handleClick(button_click_handler); // 单击
   encoder_button.handleLongPress(button_long_press_handler,
                                  800); // 800毫秒长按
@@ -218,6 +219,8 @@ void App_Init(void) {
 
   // 启用按键中断模式
   encoder_button.setInterruptMode(true);
+
+  encoder_button.setContinuousLongPress(false);
 
   // 配置编码器回调（面向对象）
   // rotary_encoder.setEventCallback(encoder_event_handler);
@@ -240,7 +243,7 @@ void App_Init(void) {
   // 初始化PWM占空比为0
   __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
   __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, 0);
-  
+
   // 初始化命令系统
   Commands_Init();
 }
@@ -253,9 +256,9 @@ void App_Loop(void) {
 
   // 检查并处理串口消息
   if (UART_Has_Message()) {
-    UartMessage_t* message = UART_Get_Message();
+    UartMessage_t *message = UART_Get_Message();
     if (message != NULL) {
-      App_Process_UART_Command((const char*)message->data, message->length);
+      App_Process_UART_Command((const char *)message->data, message->length);
       UART_Clear_Message(); // 清除消息，准备接收下一个
     }
   }
@@ -343,32 +346,32 @@ void App_Loop(void) {
   // draw_button_encoder_test();
 }
 
-/**
- * @brief 按键事件回调函数
- */
-static void button_event_handler(ButtonEvent_t event, ButtonState_t state) {
-  switch (event) {
-  case BUTTON_EVENT_PRESS:
-    // 按键按下事件，无需特殊处理
-    break;
+// /**
+//  * @brief 按键事件回调函数
+//  */
+// static void button_event_handler(ButtonEvent_t event, ButtonState_t state) {
+//   switch (event) {
+//   case BUTTON_EVENT_PRESS:
+//     // 按键按下事件，无需特殊处理
+//     break;
 
-  case BUTTON_EVENT_RELEASE:
-    // 按键释放事件，无需特殊处理
-    break;
+//   case BUTTON_EVENT_RELEASE:
+//     // 按键释放事件，无需特殊处理
+//     break;
 
-  case BUTTON_EVENT_CLICK:
-    // 按键单击事件，无需特殊处理
-    break;
+//   case BUTTON_EVENT_CLICK:
+//     // 按键单击事件，无需特殊处理
+//     break;
 
-  case BUTTON_EVENT_LONG_PRESS:
-    // 按键长按事件，无需特殊处理
-    break;
+//   case BUTTON_EVENT_LONG_PRESS:
+//     // 按键长按事件，无需特殊处理
+//     break;
 
-  case BUTTON_EVENT_MULTI_CLICK:
-    // 按键多击事件，无需特殊处理
-    break;
-  }
-}
+//   case BUTTON_EVENT_MULTI_CLICK:
+//     // 按键多击事件，无需特殊处理
+//     break;
+//   }
+// }
 
 /**
  * @brief 按键单击回调函数
@@ -466,7 +469,7 @@ void App_TIM3_IRQHandler(void) {
  * @param command 接收到的命令字符串
  * @param length 命令长度
  */
-void App_Process_UART_Command(const char* command, uint16_t length) {
+void App_Process_UART_Command(const char *command, uint16_t length) {
   // 检查命令是否有效
   if (command == NULL || length == 0) {
     UART_Send_String("ERROR: Invalid command\r\n");
@@ -480,7 +483,7 @@ void App_Process_UART_Command(const char* command, uint16_t length) {
   if (strcmp(command, "EXEC") == 0) {
     uint16_t queue_count = Commands_Get_Queue_Count();
     UART_Printf("Executing %d commands in queue...\r\n", queue_count);
-    
+
     for (int i = 0; i < queue_count + 5; i++) { // 多执行几次确保清空
       CommandStatus_t status = Commands_Execute_Next();
       if (status == CMD_STATUS_QUEUE_EMPTY) {
@@ -490,16 +493,17 @@ void App_Process_UART_Command(const char* command, uint16_t length) {
     UART_Printf("Command execution completed\r\n");
     return;
   }
-  
+
   // 特殊调试命令：查看队列状态
   if (strcmp(command, "QUEUE") == 0) {
-    UART_Printf("Queue status: %d commands pending\r\n", Commands_Get_Queue_Count());
+    UART_Printf("Queue status: %d commands pending\r\n",
+                Commands_Get_Queue_Count());
     return;
   }
 
   // 使用命令系统解析和入队命令
   uint16_t parsed_count = Commands_Parse_And_Enqueue(command);
-  
+
   if (parsed_count > 0) {
     UART_Printf("OK: Enqueued %d commands\r\n", parsed_count);
   } else {
@@ -510,6 +514,4 @@ void App_Process_UART_Command(const char* command, uint16_t length) {
 /**
  * @brief Command executor timer callback (call from TIM4 interrupt)
  */
-void App_Command_Executor_Timer_Callback(void) {
-  Commands_Executor_Loop();
-}
+void App_Command_Executor_Timer_Callback(void) { Commands_Executor_Loop(); }

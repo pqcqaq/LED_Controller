@@ -182,7 +182,15 @@ void Button::onGpioInterrupt() {
       ButtonState_t new_state =
           current_pressed ? BUTTON_STATE_PRESSED : BUTTON_STATE_RELEASED;
 
-      if (new_state != current_state_) {
+      // Check for state change (consider LONG_PRESSED as PRESSED for comparison)
+      bool state_changed = false;
+      if (current_pressed && (current_state_ == BUTTON_STATE_RELEASED)) {
+        state_changed = true;
+      } else if (!current_pressed && (current_state_ == BUTTON_STATE_PRESSED || current_state_ == BUTTON_STATE_LONG_PRESSED)) {
+        state_changed = true;
+      }
+
+      if (state_changed) {
         last_state_ = current_state_;
         current_state_ = new_state;
         last_change_time_ = current_time;
@@ -192,10 +200,12 @@ void Button::onGpioInterrupt() {
           press_start_time_ = current_time;
           long_press_triggered_ = false;
           last_long_press_time_ = 0;
+          serial_printf("Button: Press detected (interrupt mode)\r\n");
           triggerEvent(BUTTON_EVENT_PRESS);
         } else {
           // Button released
           uint32_t press_duration = current_time - press_start_time_;
+          serial_printf("Button: Release detected (interrupt mode), duration: %u ms\r\n", (unsigned int)press_duration);
           triggerEvent(BUTTON_EVENT_RELEASE);
 
           // Reset long press state when button is released
@@ -254,8 +264,15 @@ void Button::stateMachine() {
   ButtonState_t new_state =
       current_pin_state ? BUTTON_STATE_PRESSED : BUTTON_STATE_RELEASED;
 
-  // State change detection
-  if (new_state != current_state_) {
+  // State change detection (consider LONG_PRESSED as PRESSED for comparison)
+  bool state_changed = false;
+  if (current_pin_state && (current_state_ == BUTTON_STATE_RELEASED)) {
+    state_changed = true;
+  } else if (!current_pin_state && (current_state_ == BUTTON_STATE_PRESSED || current_state_ == BUTTON_STATE_LONG_PRESSED)) {
+    state_changed = true;
+  }
+
+  if (state_changed) {
     last_state_ = current_state_;
     current_state_ = new_state;
     last_change_time_ = current_time;
@@ -295,7 +312,7 @@ void Button::stateMachine() {
   }
 
   // Check for long press
-  if (long_press_enabled_ && current_state_ == BUTTON_STATE_PRESSED) {
+  if (long_press_enabled_ && (current_state_ == BUTTON_STATE_PRESSED || current_state_ == BUTTON_STATE_LONG_PRESSED)) {
     uint32_t press_duration = current_time - press_start_time_;
 
     if (!long_press_triggered_ && press_duration >= long_press_time_ms_) {
@@ -392,7 +409,12 @@ void Button::triggerMultiClick(uint8_t click_count) {
  * @brief Check for long press (for interrupt mode)
  */
 void Button::checkLongPress() {
-  if (!long_press_enabled_ || current_state_ != BUTTON_STATE_PRESSED) {
+  if (!long_press_enabled_ || current_state_ == BUTTON_STATE_RELEASED) {
+    return;
+  }
+
+  // Only check for long press if button is currently pressed
+  if (current_state_ != BUTTON_STATE_PRESSED && current_state_ != BUTTON_STATE_LONG_PRESSED) {
     return;
   }
 
@@ -404,7 +426,8 @@ void Button::checkLongPress() {
     long_press_triggered_ = true;
     last_long_press_time_ = current_time;
     current_state_ = BUTTON_STATE_LONG_PRESSED;
-
+    
+    serial_printf("Button: Long press triggered (interrupt mode), duration: %u ms\r\n", (unsigned int)press_duration);
     triggerEvent(BUTTON_EVENT_LONG_PRESS);
     triggerLongPress(press_duration);
 
