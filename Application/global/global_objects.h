@@ -43,6 +43,13 @@ typedef struct {
   uint8_t animDirection;  // 动画方向 (0=左到右, 1=右到左)
   uint32_t animStartTime; // 动画开始时间
 
+  // === OUT/OFF弹跳动画状态 ===
+  uint8_t bounceAnimActive;  // 弹跳动画是否激活
+  uint32_t bounceStartTime;  // 弹跳动画开始时间
+  int16_t bounceY;           // 当前Y偏移量 (定点数 * 256)
+  int16_t bounceVelocityY;   // Y方向速度 (定点数 * 256)
+  uint8_t bounceCount;       // 反弹次数计数
+
   // === 传感器数据 ===
   int32_t temp; // ADC读取到的温度
 } SystemState;

@@ -12,6 +12,14 @@
 #define SLEEP_TIME_MS 15000      // 屏幕息屏时间
 #define DEEP_SLEEP_TIME_MS 60000 // 进入深度睡眠时间
 
+// === 弹跳动画配置 ===
+#define BOUNCE_ANIM_DURATION_MS 600  // 弹跳动画总持续时间
+#define BOUNCE_GRAVITY 120           // 重力加速度 (定点数 * 256)
+#define BOUNCE_INITIAL_VELOCITY -900 // 初始向上速度 (定点数 * 256)
+#define BOUNCE_DAMPING 90            // 阻尼系数 (百分比)
+#define BOUNCE_MIN_VELOCITY 1        // 最小速度阈值 (定点数 * 256)
+#define BOUNCE_MAX_BOUNCES 5         // 最大反弹次数
+
 // ADC相关
 #define ADC_POW 12             // ADC读取精度
 #define ADC_READ_INTERVAL 250  // ADC读取间隔
@@ -85,6 +93,10 @@ static const char *activeStates[] = {
 
 void turnOn();
 void turnOff();
+
+// 弹跳动画相关函数
+void startBounceAnimation();
+void updateBounceAnimation();
 
 // 处理按钮单击事件
 void handleClick();

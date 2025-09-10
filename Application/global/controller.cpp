@@ -15,6 +15,61 @@
 unsigned char btn_changed = 0;
 unsigned char settings_changed = 0; // 设置已更改标志
 
+// 启动弹跳动画
+void startBounceAnimation() {
+  state.bounceAnimActive = 1;
+  state.bounceStartTime = HAL_GetTick();
+  state.bounceY = 0;                               // 从正常位置开始
+  state.bounceVelocityY = BOUNCE_INITIAL_VELOCITY; // 初始向上速度
+  state.bounceCount = 0;
+
+  serial_printf("Bounce animation started\r\n");
+}
+
+// 更新弹跳动画物理
+void updateBounceAnimation() {
+  if (!state.bounceAnimActive) {
+    return;
+  }
+
+  uint32_t now = HAL_GetTick();
+  uint32_t elapsed = now - state.bounceStartTime;
+
+  // 检查动画是否应该结束
+  if (elapsed >= BOUNCE_ANIM_DURATION_MS ||
+      state.bounceCount >= BOUNCE_MAX_BOUNCES) {
+    state.bounceAnimActive = 0;
+    state.bounceY = 0;
+    state.bounceVelocityY = 0;
+    state.bounceCount = 0;
+    serial_printf("Bounce animation ended\r\n");
+    return;
+  }
+
+  // 物理模拟：更新速度和位置
+  state.bounceVelocityY += BOUNCE_GRAVITY; // 应用重力
+  state.bounceY += state.bounceVelocityY;  // 更新位置
+
+  // 地面碰撞检测（Y=0是正常位置）
+  if (state.bounceY >= 0) {
+    state.bounceY = 0; // 限制在地面
+
+    // 只有速度足够大时才反弹
+    if (state.bounceVelocityY > BOUNCE_MIN_VELOCITY) {
+      state.bounceVelocityY =
+          -(state.bounceVelocityY * BOUNCE_DAMPING) / 100; // 反向并应用阻尼
+      state.bounceCount++;
+      serial_printf("Bounce #%d, velocity: %d\r\n", state.bounceCount,
+                    state.bounceVelocityY);
+    } else {
+      // 速度太小，停止动画
+      state.bounceVelocityY = 0;
+      state.bounceAnimActive = 0;
+      serial_printf("Bounce animation stopped (low velocity)\r\n");
+    }
+  }
+}
+
 // 计算色温对应的两个通道比例
 // 修正后的色温通道比例计算函数
 void calculateChannelRatio(uint16_t colorTemp, uint16_t brightness,
@@ -132,6 +187,8 @@ void turnOn() {
     // 开机的时候要重新设置目标PWM
     calculateChannelRatio(state.colorTemp, state.brightness,
                           &state.targetCh1PWM, &state.targetCh2PWM);
+    // 启动弹跳动画
+    startBounceAnimation();
   }
   serial_printf("Master Power: ON\r\n");
 }
@@ -141,6 +198,8 @@ void turnOff() {
     state.master = false;
     state.targetCh1PWM = 0;
     state.targetCh2PWM = 0;
+    // 启动弹跳动画
+    startBounceAnimation();
   }
   serial_printf("Master Power: OFF\r\n");
 }
@@ -684,7 +743,7 @@ void drawItemSwitchAnimation() {
 
   // 固定的文本位置 - 文本永远不移动
   int16_t tempX = 2;
-  int16_t brightX = 84;
+  int16_t brightX = 86;
 
   // 始终在固定位置显示文本
   char tempStr[8];
@@ -744,7 +803,7 @@ void updateDisp() {
        state.item != lastState.item || state.edit != lastState.edit);
 
   // 动画进行中也需要更新显示
-  bool animInProgress = state.animStarted;
+  bool animInProgress = state.animStarted || state.bounceAnimActive;
 
   if (!stateChanged && !animUpdate && !animInProgress) {
     return;
@@ -822,13 +881,58 @@ void updateDisp() {
     u8g2.drawStr(96, 7, fan_status);
   }
 
-  // === 主电源状态显示 ===
+  // === 主电源状态显示（带弹跳动画） ===
   // 电源状态 - 居中大字体显示
   u8g2.setFont(u8g2_font_8x13B_tr);
+
+  // 计算弹跳偏移
+  int16_t textY = 24; // 基础Y位置
+  if (state.bounceAnimActive) {
+    // 将定点数转换为像素偏移（除以256）
+    int16_t bounceOffset = state.bounceY / 256;
+    textY += bounceOffset;
+
+    // 限制文本位置，避免超出屏幕
+    if (textY < 10)
+      textY = 10;
+    if (textY > 60)
+      textY = 60;
+
+    // 绘制阴影效果（在地面位置）
+    if (bounceOffset < 0) { // 只有在向上时才绘制阴影
+      u8g2.setDrawColor(1);
+      // 阴影的大小和透明度根据高度调整
+      int shadowSize = (-bounceOffset) / 8; // 高度越高阴影越大
+      shadowSize = constrain(shadowSize, 1, 4);
+
+      // 绘制椭圆形阴影在基础Y位置
+      int shadowX = 54 + (20 - shadowSize * 4) / 2; // 居中阴影
+      int shadowY = 24;
+      for (int i = 0; i < shadowSize; i++) {
+        u8g2.drawHLine(shadowX + i, shadowY + i / 2, shadowSize * 4 - 2 * i);
+      }
+    }
+
+    // 弹跳时的额外视觉效果
+    if (state.bounceVelocityY > 100 || state.bounceVelocityY < -100) {
+      // 高速移动时添加运动模糊效果
+      u8g2.setDrawColor(1);
+      if (state.master) {
+        u8g2.drawStr(53, textY + 1, "OUT"); // 轻微偏移
+        u8g2.drawStr(55, textY - 1, "OUT");
+      } else {
+        u8g2.drawStr(53, textY + 1, "OFF");
+        u8g2.drawStr(55, textY - 1, "OFF");
+      }
+    }
+  }
+
+  // 绘制主文本
+  u8g2.setDrawColor(1);
   if (state.master) {
-    u8g2.drawStr(54, 24, "OUT");
+    u8g2.drawStr(54, textY, "OUT");
   } else {
-    u8g2.drawStr(54, 24, "OFF");
+    u8g2.drawStr(54, textY, "OFF");
   }
 
   // === 色温和亮度数值显示（含动画） ===
@@ -961,6 +1065,7 @@ void loop() {
 
   if (now - lastDisplayUpdate > DISPLAY_UPDATE_MS) {
     // serial_printf("Loop: %lu\r\n", now);
+    updateBounceAnimation(); // 更新弹跳动画
     updateDisp();
     lastDisplayUpdate = now;
   }
