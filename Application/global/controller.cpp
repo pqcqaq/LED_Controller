@@ -389,8 +389,8 @@ void updateBallPhysics() {
   }
 
   // 只在实际发生反弹时触发特效
-  if (bounced && ball.bounceEffect == 0) {
-    ball.bounceEffect = 8;
+  if (bounced) {
+    ball.bounceEffect += 8; // 反弹时触发特效
   }
 
   // 减少反弹特效计数器
