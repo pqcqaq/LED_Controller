@@ -22,8 +22,6 @@ void startBounceAnimation() {
   state.bounceY = 0;                               // 从正常位置开始
   state.bounceVelocityY = BOUNCE_INITIAL_VELOCITY; // 初始向上速度
   state.bounceCount = 0;
-
-  serial_printf("Bounce animation started\r\n");
 }
 
 // 更新弹跳动画物理
@@ -42,7 +40,6 @@ void updateBounceAnimation() {
     state.bounceY = 0;
     state.bounceVelocityY = 0;
     state.bounceCount = 0;
-    serial_printf("Bounce animation ended\r\n");
     return;
   }
 
@@ -59,13 +56,10 @@ void updateBounceAnimation() {
       state.bounceVelocityY =
           -(state.bounceVelocityY * BOUNCE_DAMPING) / 100; // 反向并应用阻尼
       state.bounceCount++;
-      serial_printf("Bounce #%d, velocity: %d\r\n", state.bounceCount,
-                    state.bounceVelocityY);
     } else {
       // 速度太小，停止动画
       state.bounceVelocityY = 0;
       state.bounceAnimActive = 0;
-      serial_printf("Bounce animation stopped (low velocity)\r\n");
     }
   }
 }
@@ -281,8 +275,6 @@ void updateADC() {
   static uint32_t lastUpdateFanTime = 0;
   if (now - lastUpdateFanTime > FAN_UPDATE_INTERVAL) {
 
-    // serial_printf("Fan Update\r\n");
-
     lastUpdateFanTime = now;
     // 以下是模拟PWM与风扇控制
     if (!state.fanAuto) {
@@ -364,18 +356,11 @@ void handleEnc(EncoderDirection_t direction, int32_t steps,
                          ? state.colorTemp + steps * LED_TEMP_STEP
                          : state.colorTemp - steps * LED_TEMP_STEP),
                     COLOR_TEMP_MIN, COLOR_TEMP_MAX);
-
-      serial_printf("Color Temp: %dK, last Step: %d\r\n", state.colorTemp,
-                    (direction == ENCODER_DIR_CW ? steps : -steps));
-
     } else if (state.item == 2) { // 亮度调节
       state.brightness =
           constrain(direction == ENCODER_DIR_CW ? state.brightness + steps
                                                 : state.brightness - steps,
                     0, LED_MAX_BRIGHTNESS);
-
-      serial_printf("Brightness: %d%%, last Step: %d\r\n", state.brightness,
-                    direction == ENCODER_DIR_CW ? steps : -steps);
     }
     settings_changed = 1;
   }
