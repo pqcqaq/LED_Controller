@@ -70,9 +70,6 @@ void startFanModeAnimation() {
   state.fanAnimActive = 1;
   state.fanAnimStartTime = HAL_GetTick();
   state.fanAnimCharIndex = 0; // 从第一个字符开始
-  // fanTargetMode 已经在调用前设置好了
-  serial_printf("Fan animation started: targetMode=%d\r\n",
-                state.fanTargetMode);
 }
 
 // 更新风扇模式切换动画
@@ -93,7 +90,7 @@ void updateFanModeAnimation() {
 
   // 字符逐个切换，从动画开始就立即进行
   // 每FAN_MODE_CHAR_DELAY_MS毫秒切换一个字符
-  uint8_t targetChars = state.fanTargetMode ? 4 : 5; // AUTO=4字符, FORCE=5字符
+  uint8_t targetChars = state.fanAuto ? 4 : 5; // AUTO=4字符, FORCE=5字符
   uint8_t newCharIndex = elapsed / FAN_MODE_CHAR_DELAY_MS;
 
   if (newCharIndex > targetChars) {
@@ -195,22 +192,34 @@ void handleClick() {
 // 处理按钮双击事件 - 开关输出
 void handleDoubleClick() {
   btn_changed = 1;
+  settings_changed = 1;
 
   // 记录切换前的状态用于动画
-  bool oldFanAuto = state.fanAuto;
-
   // 双击切换主开关状态
   // state.master = !state.master;
   // state.edit = -1; // 退出编辑模式
-  state.fanAuto = !state.fanAuto;
-  settings_changed = 1;
+  if (!state.fanAuto) {
+    fan_auto();
+  } else {
+    fan_force();
+  }
 
-  // 启动风扇模式切换动画，传递旧状态信息
-  state.fanTargetMode =
-      oldFanAuto ? 0 : 1; // 旧状态AUTO→目标FORCE(0), 旧状态FORCE→目标AUTO(1)
-  startFanModeAnimation();
+}
 
-  serial_printf("Fan Auto Mode: %s\r\n", state.fanAuto ? "ON" : "OFF");
+void fan_auto() {
+  if (!state.fanAuto) {
+    state.fanAuto = true;
+    startFanModeAnimation();
+    return;
+  }
+}
+
+void fan_force() {
+  if (state.fanAuto) {
+    state.fanAuto = false;
+    startFanModeAnimation();
+    return;
+  }
 }
 
 // 处理按钮长按事件 - 开机/关机
@@ -628,11 +637,9 @@ void drawFanModeAnimation() {
 
   u8g2.setFont(u8g2_font_6x10_tf);
 
-  // 确定当前显示的文本和目标文本，基于fanTargetMode
-  const char *currentText =
-      state.fanTargetMode ? "FORCE" : " AUTO"; // 切换前的文本
-  const char *targetText =
-      state.fanTargetMode ? " AUTO" : "FORCE"; // 切换后的文本
+  // 确定当前显示的文本和目标文本，基于fanAuto
+  const char *currentText = state.fanAuto ? "FORCE" : " AUTO"; // 切换前的文本
+  const char *targetText = state.fanAuto ? " AUTO" : "FORCE";  // 切换后的文本
 
   // 阶段2：字符逐个切换
   char displayText[6]; // 最大5个字符 + 结束符

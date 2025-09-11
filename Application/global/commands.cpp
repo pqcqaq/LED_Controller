@@ -490,14 +490,14 @@ __weak CommandStatus_t Cmd_Fan_Handler(const char *params[],
 
 __weak CommandStatus_t Cmd_Fan_Auto_Handler(const char *params[],
                                             uint8_t param_count) {
-  state.fanAuto = true;
+  fan_auto();
   Commands_Result_Printf("Fan set to AUTO mode\r\n");
   return CMD_STATUS_SUCCESS;
 }
 
 __weak CommandStatus_t Cmd_Fan_Force_Handler(const char *params[],
                                              uint8_t param_count) {
-  state.fanAuto = false;
+  fan_force();
   Commands_Result_Printf("Fan set to FORCE mode\r\n");
   return CMD_STATUS_SUCCESS;
 }

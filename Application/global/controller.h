@@ -98,6 +98,8 @@ static const char *activeStates[] = {
 
 void turnOn();
 void turnOff();
+void fan_auto();
+void fan_force();
 
 // 弹跳动画相关函数
 void startBounceAnimation();
