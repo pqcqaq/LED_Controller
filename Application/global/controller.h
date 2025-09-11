@@ -20,6 +20,11 @@
 #define BOUNCE_MIN_VELOCITY 1        // 最小速度阈值 (定点数 * 256)
 #define BOUNCE_MAX_BOUNCES 5         // 最大反弹次数
 
+// === 风扇模式切换动画配置 ===
+#define FAN_MODE_ANIM_DURATION_MS 600   // 风扇模式切换动画总持续时间
+#define FAN_MODE_CURSOR_SPEED 8         // 光标移动速度 (像素/帧) - 已废弃
+#define FAN_MODE_CHAR_DELAY_MS 80       // 每个字符切换的延迟时间
+
 // ADC相关
 #define ADC_POW 12             // ADC读取精度
 #define ADC_READ_INTERVAL 250  // ADC读取间隔
@@ -97,6 +102,11 @@ void turnOff();
 // 弹跳动画相关函数
 void startBounceAnimation();
 void updateBounceAnimation();
+
+// 风扇模式切换动画相关函数
+void startFanModeAnimation();
+void updateFanModeAnimation();
+void drawFanModeAnimation();
 
 // 处理按钮单击事件
 void handleClick();

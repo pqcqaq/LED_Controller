@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <stdio.h>
+#include <string.h>
 
 unsigned char btn_changed = 0;
 unsigned char settings_changed = 0; // 设置已更改标志
@@ -61,6 +62,50 @@ void updateBounceAnimation() {
       state.bounceVelocityY = 0;
       state.bounceAnimActive = 0;
     }
+  }
+}
+
+// 启动风扇模式切换动画
+void startFanModeAnimation() {
+  state.fanAnimActive = 1;
+  state.fanAnimStartTime = HAL_GetTick();
+  state.fanAnimCharIndex = 0; // 从第一个字符开始
+  // fanTargetMode 已经在调用前设置好了
+  serial_printf("Fan animation started: targetMode=%d\r\n",
+                state.fanTargetMode);
+}
+
+// 更新风扇模式切换动画
+void updateFanModeAnimation() {
+  if (!state.fanAnimActive) {
+    return;
+  }
+
+  uint32_t now = HAL_GetTick();
+  uint32_t elapsed = now - state.fanAnimStartTime;
+
+  // 检查动画是否应该结束
+  if (elapsed >= FAN_MODE_ANIM_DURATION_MS) {
+    state.fanAnimActive = 0;
+    state.fanAnimCharIndex = 0;
+    return;
+  }
+
+  // 字符逐个切换，从动画开始就立即进行
+  // 每FAN_MODE_CHAR_DELAY_MS毫秒切换一个字符
+  uint8_t targetChars = state.fanTargetMode ? 4 : 5; // AUTO=4字符, FORCE=5字符
+  uint8_t newCharIndex = elapsed / FAN_MODE_CHAR_DELAY_MS;
+
+  if (newCharIndex > targetChars) {
+    newCharIndex = targetChars;
+  }
+
+  state.fanAnimCharIndex = newCharIndex;
+
+  // 如果所有字符都切换完成，结束动画
+  if (state.fanAnimCharIndex >= targetChars) {
+    state.fanAnimActive = 0;
+    serial_printf("Fan animation completed\r\n");
   }
 }
 
@@ -150,11 +195,20 @@ void handleClick() {
 // 处理按钮双击事件 - 开关输出
 void handleDoubleClick() {
   btn_changed = 1;
+
+  // 记录切换前的状态用于动画
+  bool oldFanAuto = state.fanAuto;
+
   // 双击切换主开关状态
   // state.master = !state.master;
   // state.edit = -1; // 退出编辑模式
   state.fanAuto = !state.fanAuto;
   settings_changed = 1;
+
+  // 启动风扇模式切换动画，传递旧状态信息
+  state.fanTargetMode =
+      oldFanAuto ? 0 : 1; // 旧状态AUTO→目标FORCE(0), 旧状态FORCE→目标AUTO(1)
+  startFanModeAnimation();
 
   serial_printf("Fan Auto Mode: %s\r\n", state.fanAuto ? "ON" : "OFF");
 }
@@ -566,6 +620,59 @@ void drawStars(uint8_t animFrame) {
   }
 }
 
+// 绘制风扇模式切换动画
+void drawFanModeAnimation() {
+  if (!state.fanAnimActive) {
+    return; // 动画未激活时不绘制
+  }
+
+  u8g2.setFont(u8g2_font_6x10_tf);
+
+  // 确定当前显示的文本和目标文本，基于fanTargetMode
+  const char *currentText =
+      state.fanTargetMode ? "FORCE" : " AUTO"; // 切换前的文本
+  const char *targetText =
+      state.fanTargetMode ? " AUTO" : "FORCE"; // 切换后的文本
+
+  // 阶段2：字符逐个切换
+  char displayText[6]; // 最大5个字符 + 结束符
+  uint8_t currentLen = strlen(currentText);
+  uint8_t targetLen = strlen(targetText);
+  uint8_t maxLen = (currentLen > targetLen) ? currentLen : targetLen;
+
+  // 构建显示文本：已切换的字符 + 未切换的字符
+  for (uint8_t i = 0; i < maxLen; i++) {
+    if (i < state.fanAnimCharIndex) {
+      // 已切换的字符：显示目标文本的字符
+      if (i < targetLen) {
+        displayText[i] = targetText[i];
+      } else {
+        displayText[i] = ' '; // 如果目标文本较短，用空格填充
+      }
+    } else {
+      // 未切换的字符：显示当前文本的字符
+      if (i < currentLen) {
+        displayText[i] = currentText[i];
+      } else {
+        displayText[i] = ' '; // 如果当前文本较短，用空格填充
+      }
+    }
+  }
+  displayText[maxLen] = '\0'; // 字符串结束符
+
+  // 绘制混合文本
+  u8g2.drawStr(96, 7, displayText);
+
+  // 在当前正在切换的字符位置绘制光标
+  if (state.fanAnimCharIndex < maxLen) {
+    uint8_t cursorX = 96 + state.fanAnimCharIndex * 6; // 当前切换字符的位置
+
+    // 光标闪烁效果
+    // 在字符下方绘制光标
+    u8g2.drawVLine(cursorX, 8, 2); // 垂直线
+  }
+}
+
 // 绘制波浪形边框
 void drawWaveBorder() {
   uint32_t time = HAL_GetTick();
@@ -788,7 +895,8 @@ void updateDisp() {
        state.item != lastState.item || state.edit != lastState.edit);
 
   // 动画进行中也需要更新显示
-  bool animInProgress = state.animStarted || state.bounceAnimActive;
+  bool animInProgress =
+      state.animStarted || state.bounceAnimActive || state.fanAnimActive;
 
   if (!stateChanged && !animUpdate && !animInProgress) {
     return;
@@ -861,9 +969,15 @@ void updateDisp() {
     }
     u8g2.drawStr(0, 7, tempStr);
 
-    // 风扇状态
-    const char *fan_status = state.fanAuto ? " AUTO" : "FORCE";
-    u8g2.drawStr(96, 7, fan_status);
+    // 风扇状态 - 根据是否有动画来决定绘制方式
+    if (state.fanAnimActive) {
+      // 如果风扇动画激活，绘制动画
+      drawFanModeAnimation();
+    } else {
+      // 正常显示风扇状态
+      const char *fan_status = state.fanAuto ? " AUTO" : "FORCE";
+      u8g2.drawStr(96, 7, fan_status);
+    }
   }
 
   // === 主电源状态显示（带弹跳动画） ===
@@ -1050,7 +1164,8 @@ void loop() {
 
   if (now - lastDisplayUpdate > DISPLAY_UPDATE_MS) {
     // serial_printf("Loop: %lu\r\n", now);
-    updateBounceAnimation(); // 更新弹跳动画
+    updateBounceAnimation();  // 更新弹跳动画
+    updateFanModeAnimation(); // 更新风扇模式切换动画
     updateDisp();
     lastDisplayUpdate = now;
   }
